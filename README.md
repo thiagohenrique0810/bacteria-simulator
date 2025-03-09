@@ -101,9 +101,37 @@ bacterias/
 ## Como Usar
 
 1. Clone o repositório
-2. Abra o arquivo `index.html` em um navegador moderno
-3. A simulação iniciará automaticamente
-4. Use os controles para interagir com a simulação
+2. Execute um dos servidores locais disponíveis:
+
+   ### Opção 1: Usando Python
+   ```bash
+   python -m http.server 8000
+   ```
+   Após executar, o servidor estará disponível em:
+   - http://localhost:8000
+
+   ### Opção 2: Usando Node.js
+   ```bash
+   npx http-server -p 8080
+   ```
+   Após executar, o servidor estará disponível em:
+   - http://localhost:8080
+   - http://127.0.0.1:8080
+   - http://[seu-ip-local]:8080
+
+3. Abra um dos endereços acima em seu navegador moderno
+4. A simulação iniciará automaticamente
+5. Use os controles para interagir com a simulação
+
+### Notas sobre o Servidor
+- Para parar o servidor, pressione `Ctrl+C` no terminal
+- Certifique-se de que as portas escolhidas (8000 ou 8080) não estejam em uso
+- O servidor Node.js oferece recursos adicionais como:
+  - CORS: desabilitado por padrão
+  - Cache: 3600 segundos
+  - Timeout de Conexão: 120 segundos
+  - Listagem de Diretórios: visível
+  - AutoIndex: visível
 
 ## Desenvolvimento
 

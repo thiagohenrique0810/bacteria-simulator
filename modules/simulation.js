@@ -70,22 +70,31 @@ class Simulation {
 
         const state = this.controls.getState();
         
-        // Atualiza configurações
-        this.speed = state.simulationSpeed;
-        this.populationLimit = state.populationLimit;
-        this.initialEnergy = state.initialEnergy;
-        this.foodValue = state.foodValue;
-        this.foodRate = state.foodRate;
-        this.maxObstacles = state.maxObstacles;
+        // Atualiza configurações com validação
+        this.speed = Math.max(0.1, Math.min(2, state.simulationSpeed));
+        this.populationLimit = Math.max(20, Math.min(200, state.populationLimit));
+        this.initialEnergy = Math.max(50, Math.min(150, state.initialEnergy));
+        this.foodValue = Math.max(10, Math.min(50, state.foodValue));
+        this.foodRate = Math.max(0, Math.min(1, state.foodRate));
+        this.maxObstacles = Math.max(0, Math.min(20, state.maxObstacles));
         
         // Atualiza visualização
         this.showTrails = state.showTrails;
         this.showEnergy = state.showEnergy;
         this.showGender = state.showGender;
-        this.zoom = state.zoom;
+        this.zoom = Math.max(0.5, Math.min(2, state.zoom));
 
-        // Atualiza número de obstáculos se necessário
+        // Atualiza número de obstáculos
         this.updateObstacles();
+
+        console.log('Configurações iniciais carregadas:', {
+            speed: this.speed,
+            populationLimit: this.populationLimit,
+            initialEnergy: this.initialEnergy,
+            foodValue: this.foodValue,
+            foodRate: this.foodRate,
+            maxObstacles: this.maxObstacles
+        });
     }
 
     /**
@@ -493,6 +502,11 @@ class Simulation {
             },
             onChange: (state) => {
                 // Atualiza configurações com validação
+                const oldSpeed = this.speed;
+                const oldFoodRate = this.foodRate;
+                const oldFoodValue = this.foodValue;
+                const oldMaxObstacles = this.maxObstacles;
+
                 this.speed = Math.max(0.1, Math.min(2, state.simulationSpeed));
                 this.populationLimit = Math.max(20, Math.min(200, state.populationLimit));
                 this.initialEnergy = Math.max(50, Math.min(150, state.initialEnergy));
@@ -506,21 +520,21 @@ class Simulation {
                 this.showGender = state.showGender;
                 this.zoom = Math.max(0.5, Math.min(2, state.zoom));
 
-                // Atualiza número de obstáculos se necessário
-                this.updateObstacles();
+                // Atualiza obstáculos apenas se o valor mudou
+                if (oldMaxObstacles !== this.maxObstacles) {
+                    this.updateObstacles();
+                }
 
-                // Log das mudanças
-                console.log('Configurações atualizadas:', {
-                    speed: this.speed,
-                    populationLimit: this.populationLimit,
-                    initialEnergy: this.initialEnergy,
-                    foodValue: this.foodValue,
-                    foodRate: this.foodRate,
-                    maxObstacles: this.maxObstacles,
-                    zoom: this.zoom
-                });
+                // Log das mudanças significativas
+                if (oldSpeed !== this.speed) console.log('Velocidade atualizada:', this.speed);
+                if (oldFoodRate !== this.foodRate) console.log('Taxa de comida atualizada:', this.foodRate);
+                if (oldFoodValue !== this.foodValue) console.log('Valor nutricional atualizado:', this.foodValue);
+                if (oldMaxObstacles !== this.maxObstacles) console.log('Número de obstáculos atualizado:', this.maxObstacles);
             }
         });
+
+        // Força uma atualização inicial
+        this.updateFromControls();
     }
 
     /**

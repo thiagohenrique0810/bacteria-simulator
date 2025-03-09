@@ -14,17 +14,21 @@ function setup() {
     // Cria o canvas primeiro
     createCanvas(1000, 600);
     
-    // Inicializa a simulação
-    simulation = new Simulation();
-    
-    // Inicializa o sistema de visualização
-    visualization = new SimulationVisualization(simulation);
-    
-    // Aguarda um frame para garantir que todos os sistemas estejam prontos
+    // Aguarda um momento para garantir que o p5.js está pronto
     window.setTimeout(() => {
+        // Inicializa a simulação
+        simulation = new Simulation();
+        
+        // Inicializa o sistema de visualização
+        visualization = new SimulationVisualization(simulation);
+        
         // Configura a simulação
         simulation.setup();
+        
+        // Marca setup como completo
         setupComplete = true;
+        
+        console.log('Setup completo');
     }, 100);
 }
 
@@ -32,7 +36,16 @@ function setup() {
  * Loop principal
  */
 function draw() {
-    if (!setupComplete) return;
+    if (!setupComplete) {
+        // Mostra mensagem de carregamento
+        background(51);
+        fill(255);
+        noStroke();
+        textSize(20);
+        textAlign(CENTER, CENTER);
+        text('Carregando...', width/2, height/2);
+        return;
+    }
 
     // Limpa a tela
     background(51);
@@ -52,6 +65,12 @@ function draw() {
  */
 function mousePressed() {
     if (!setupComplete) return;
+
+    // Verifica se o clique foi na área de controles
+    const controlsContainer = document.getElementById('controls-container');
+    if (controlsContainer && controlsContainer.contains(event.target)) {
+        return false; // Permite que o evento seja processado pelos controles
+    }
 
     if (mouseX >= 800) return false; // Ignora cliques na área de informações
     if (mouseY >= height) return false;

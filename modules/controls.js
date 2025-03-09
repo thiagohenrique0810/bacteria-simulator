@@ -7,12 +7,13 @@ class Controls {
      */
     constructor() {
         this.initialized = false;
-        // Aguarda o próximo frame para garantir que p5.js está pronto
+        // Aumenta o tempo de espera para garantir que o p5.js esteja pronto
         window.setTimeout(() => {
             this.setupControls();
             this.setupEventListeners();
             this.initialized = true;
-        }, 50);
+            console.log('Controles inicializados');
+        }, 500);
     }
 
     /**
@@ -29,6 +30,9 @@ class Controls {
         this.container.style('box-shadow', '0 2px 5px rgba(0,0,0,0.1)');
         this.container.style('width', '980px');
         this.container.style('user-select', 'none');
+        this.container.style('z-index', '1000');
+        this.container.style('pointer-events', 'auto'); // Garante que os eventos do mouse sejam capturados
+        this.container.id('controls-container');
 
         // Controles de simulação
         this.addSimulationControls();
@@ -44,6 +48,11 @@ class Controls {
 
         // Estiliza todos os sliders
         this.styleAllSliders();
+
+        // Previne propagação de eventos do mouse para o canvas
+        this.container.elt.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
     }
 
     /**
@@ -212,9 +221,6 @@ class Controls {
 
     /**
      * Adiciona uma linha de controle com label
-     * @param {p5.Element} parent - Elemento pai
-     * @param {string} label - Label do controle
-     * @param {p5.Element} control - Elemento de controle
      */
     addControlRow(parent, label, control) {
         const row = createDiv();
@@ -225,6 +231,9 @@ class Controls {
         row.style('background-color', '#f5f5f5');
         row.style('border-radius', '4px');
         row.style('border', '1px solid #ddd');
+        row.style('position', 'relative');
+        row.style('z-index', '1001');
+        row.style('pointer-events', 'auto');
         
         const labelEl = createElement('span', label);
         labelEl.style('margin-right', '10px');
@@ -233,27 +242,62 @@ class Controls {
         labelEl.style('color', '#333');
         
         if (control.elt.type === 'range') {
+            // Configura o slider
+            control.style('width', '200px');
+            control.style('margin', '0 10px');
+            control.style('cursor', 'pointer');
+            control.style('z-index', '1002');
+            control.style('pointer-events', 'auto');
+            
+            // Adiciona o display de valor
             const valueDisplay = createElement('span', control.value());
             valueDisplay.class('value-display');
             valueDisplay.style('margin-left', '10px');
             valueDisplay.style('min-width', '40px');
             valueDisplay.style('font-weight', 'bold');
             valueDisplay.style('color', '#4CAF50');
-            
+
+            // Função para atualizar o valor e o estado
+            const updateValue = () => {
+                const value = control.value();
+                valueDisplay.html(value);
+                if (this.onChange) {
+                    this.onChange(this.getState());
+                }
+            };
+
+            // Atualiza o valor em tempo real
+            control.elt.addEventListener('input', updateValue);
+            control.elt.addEventListener('change', updateValue);
+
+            // Eventos de teclado
+            control.elt.addEventListener('keydown', (e) => {
+                const step = parseFloat(control.elt.step) || 1;
+                const value = parseFloat(control.value());
+                let newValue = value;
+                
+                if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                    newValue = value + step;
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                    newValue = value - step;
+                }
+                
+                if (newValue !== value) {
+                    control.value(newValue);
+                    updateValue();
+                }
+            });
+
             row.child(labelEl);
             row.child(control);
             row.child(valueDisplay);
-            
-            // Atualiza o valor quando o slider muda
-            control.input(() => {
-                valueDisplay.html(control.value());
-            });
         } else {
             row.child(labelEl);
             row.child(control);
         }
         
         parent.child(row);
+        return row;
     }
 
     /**
@@ -264,124 +308,68 @@ class Controls {
         this.pauseButton.mousePressed(() => {
             const isPaused = this.pauseButton.html() === 'Continuar';
             this.pauseButton.html(isPaused ? 'Pausar' : 'Continuar');
-            if (typeof this.onPauseToggle === 'function') {
+            if (this.onPauseToggle) {
                 this.onPauseToggle(!isPaused);
             }
         });
 
         this.resetButton.mousePressed(() => {
-            if (typeof this.onReset === 'function') {
+            if (this.onReset) {
                 this.onReset();
             }
         });
 
         // Ambiente
         this.eventButton.mousePressed(() => {
-            if (typeof this.onRandomEvent === 'function') {
+            if (this.onRandomEvent) {
                 this.onRandomEvent();
             }
         });
 
         // Salvamento
         this.saveButton.mousePressed(() => {
-            if (typeof this.onSave === 'function') {
+            if (this.onSave) {
                 this.onSave();
             }
         });
 
         this.loadButton.mousePressed(() => {
-            if (typeof this.onLoad === 'function') {
+            if (this.onLoad) {
                 this.onLoad();
             }
         });
 
         // Novos event listeners para ambiente
         this.clearFoodButton.mousePressed(() => {
-            if (typeof this.onClearFood === 'function') {
+            if (this.onClearFood) {
                 this.onClearFood();
             }
         });
 
         this.clearObstaclesButton.mousePressed(() => {
-            if (typeof this.onClearObstacles === 'function') {
+            if (this.onClearObstacles) {
                 this.onClearObstacles();
             }
         });
 
         // Event listeners para controles de visualização
         this.showTrailsCheckbox.changed(() => {
-            if (typeof this.onToggleTrails === 'function') {
+            if (this.onToggleTrails) {
                 this.onToggleTrails(this.showTrailsCheckbox.checked());
             }
         });
 
         this.showEnergyCheckbox.changed(() => {
-            if (typeof this.onToggleEnergy === 'function') {
+            if (this.onToggleEnergy) {
                 this.onToggleEnergy(this.showEnergyCheckbox.checked());
             }
         });
 
         this.showGenderCheckbox.changed(() => {
-            if (typeof this.onToggleGender === 'function') {
+            if (this.onToggleGender) {
                 this.onToggleGender(this.showGenderCheckbox.checked());
             }
         });
-
-        // Event listeners para sliders com debounce
-        const sliders = [
-            this.speedSlider,
-            this.populationLimitSlider,
-            this.initialEnergySlider,
-            this.foodRateSlider,
-            this.foodValueSlider,
-            this.obstacleSlider,
-            this.zoomSlider
-        ];
-
-        sliders.forEach(slider => {
-            if (slider) {
-                slider.input(() => {
-                    this.notifyChange();
-                    this.updateValueDisplay(slider);
-                });
-                slider.mousePressed(() => {
-                    slider.elt.focus();
-                });
-                slider.mouseReleased(() => {
-                    this.notifyChange();
-                    this.updateValueDisplay(slider);
-                });
-                slider.elt.addEventListener('keydown', (e) => {
-                    let value = parseFloat(slider.value());
-                    const step = parseFloat(slider.elt.step) || 1;
-                    
-                    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-                        slider.value(value + step);
-                        this.notifyChange();
-                        this.updateValueDisplay(slider);
-                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-                        slider.value(value - step);
-                        this.notifyChange();
-                        this.updateValueDisplay(slider);
-                    }
-                });
-            }
-        });
-    }
-
-    /**
-     * Notifica mudança nos controles
-     */
-    notifyChange() {
-        if (!this.initialized) return;
-        
-        if (typeof this.onChange === 'function') {
-            const state = this.getState();
-            this.onChange(state);
-            
-            // Força atualização visual
-            this.updateAllValueDisplays();
-        }
     }
 
     /**
@@ -405,19 +393,20 @@ class Controls {
             };
         }
 
+        // Garante que todos os valores são números
         return {
-            simulationSpeed: this.speedSlider?.value() || 1,
-            foodRate: this.foodRateSlider?.value() || 0.5,
-            foodValue: this.foodValueSlider?.value() || 30,
-            maxObstacles: this.obstacleSlider?.value() || 5,
-            populationLimit: this.populationLimitSlider?.value() || 100,
-            initialEnergy: this.initialEnergySlider?.value() || 100,
+            simulationSpeed: Number(this.speedSlider?.value()) || 1,
+            foodRate: Number(this.foodRateSlider?.value()) || 0.5,
+            foodValue: Number(this.foodValueSlider?.value()) || 30,
+            maxObstacles: Number(this.obstacleSlider?.value()) || 5,
+            populationLimit: Number(this.populationLimitSlider?.value()) || 100,
+            initialEnergy: Number(this.initialEnergySlider?.value()) || 100,
             showStats: this.statsCheckbox?.checked() || true,
             debugMode: this.debugCheckbox?.checked() || false,
             showTrails: this.showTrailsCheckbox?.checked() || false,
             showEnergy: this.showEnergyCheckbox?.checked() || true,
             showGender: this.showGenderCheckbox?.checked() || true,
-            zoom: this.zoomSlider?.value() || 1
+            zoom: Number(this.zoomSlider?.value()) || 1
         };
     }
 
@@ -457,73 +446,63 @@ class Controls {
             if (slider) {
                 // Configuração básica do slider
                 slider.elt.type = 'range';
-                slider.style('width', '200px');
-                slider.style('margin', '0 10px');
                 
-                // Estilo do slider
+                // Remove estilos padrão
                 slider.style('appearance', 'none');
                 slider.style('-webkit-appearance', 'none');
                 slider.style('-moz-appearance', 'none');
-                slider.style('background', '#ddd');
-                slider.style('height', '8px');
-                slider.style('border-radius', '4px');
-                slider.style('outline', 'none');
                 
-                // Estilo do thumb para diferentes navegadores
-                const thumbStyle = `
-                    width: 20px;
-                    height: 20px;
-                    border-radius: 50%;
-                    background: #4CAF50;
-                    cursor: pointer;
+                // Estilo base do slider
+                slider.style('width', '200px');
+                slider.style('height', '8px');
+                slider.style('background', '#ddd');
+                slider.style('outline', 'none');
+                slider.style('opacity', '1');
+                slider.style('transition', 'opacity .2s');
+                slider.style('border-radius', '4px');
+                slider.style('cursor', 'pointer');
+                slider.style('z-index', '1002');
+                
+                // Estilo do track
+                const trackStyle = `
+                    height: 8px;
+                    background: #ddd;
+                    border-radius: 4px;
                     border: none;
-                    margin-top: -6px;
                 `;
                 
-                slider.style('::-webkit-slider-thumb', `{
+                slider.style('::-webkit-slider-runnable-track', `{${trackStyle}}`);
+                slider.style('::-moz-range-track', `{${trackStyle}}`);
+                slider.style('::-ms-track', `{${trackStyle}}`);
+                
+                // Estilo do thumb
+                const thumbStyle = `
                     -webkit-appearance: none;
                     appearance: none;
-                    ${thumbStyle}
-                }`);
+                    width: 20px;
+                    height: 20px;
+                    background: #4CAF50;
+                    border-radius: 50%;
+                    border: none;
+                    cursor: pointer;
+                    margin-top: -6px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                    transition: background .2s, box-shadow .2s;
+                `;
                 
-                slider.style('::-moz-range-thumb', `{
-                    ${thumbStyle}
-                }`);
+                slider.style('::-webkit-slider-thumb', `{${thumbStyle}}`);
+                slider.style('::-moz-range-thumb', `{${thumbStyle}}`);
+                slider.style('::-ms-thumb', `{${thumbStyle}}`);
                 
-                slider.style('::-ms-thumb', `{
-                    ${thumbStyle}
-                }`);
+                // Hover e focus states
+                slider.style(':hover', '{opacity: 0.9;}');
+                slider.style(':focus', '{outline: none;}');
+                slider.style(':active::-webkit-slider-thumb', '{background: #45a049; box-shadow: 0 2px 5px rgba(0,0,0,0.5);}');
+                slider.style(':active::-moz-range-thumb', '{background: #45a049; box-shadow: 0 2px 5px rgba(0,0,0,0.5);}');
                 
-                // Eventos do slider
-                slider.input(() => {
-                    this.notifyChange();
-                    this.updateValueDisplay(slider);
-                });
-                
-                slider.mousePressed(() => {
-                    slider.elt.focus();
-                });
-                
-                slider.mouseReleased(() => {
-                    this.notifyChange();
-                    this.updateValueDisplay(slider);
-                });
-                
-                // Garante que o slider responda ao teclado
-                slider.elt.addEventListener('keydown', (e) => {
-                    let value = parseFloat(slider.value());
-                    const step = parseFloat(slider.elt.step) || 1;
-                    
-                    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-                        slider.value(value + step);
-                        this.notifyChange();
-                        this.updateValueDisplay(slider);
-                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-                        slider.value(value - step);
-                        this.notifyChange();
-                        this.updateValueDisplay(slider);
-                    }
-                });
+                // Força atualização inicial
+                slider.elt.value = slider.value();
+                this.updateValueDisplay(slider);
             }
         });
     }

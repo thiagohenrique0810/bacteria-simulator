@@ -9,103 +9,53 @@ class Behavior {
     constructor(dna) {
         this.dna = dna;
         this.currentBehavior = 'explore';
-        this.restTimer = 0;
-        this.minRestTime = 60;
-        this.maxRestTime = 180;
+        this.behaviorTimer = 0;
+        this.minBehaviorTime = 60;  // 1 segundo
+        this.maxBehaviorTime = 300; // 5 segundos
+        this.hungerThreshold = 0.7; // 70% do tempo de fome
     }
 
     /**
      * Atualiza o comportamento
      * @param {number} health - Saúde atual
-     * @param {number} timeSinceLastMeal - Tempo desde a última refeição
+     * @param {number} timeSinceLastMeal - Tempo desde última refeição
      * @param {number} starvationTime - Tempo até morrer de fome
      * @param {boolean} canMate - Se pode acasalar
      * @param {boolean} isInMatingRecovery - Se está em recuperação de acasalamento
      */
     update(health, timeSinceLastMeal, starvationTime, canMate, isInMatingRecovery) {
-        // Se estiver descansando, verifica se pode parar
-        if (this.isRestingState()) {
-            this.restTimer--;
-            if (this.restTimer <= 0) {
-                this.currentBehavior = 'explore';
-            }
-            return;
-        }
+        // Atualiza timer de comportamento
+        this.behaviorTimer--;
 
-        // Calcula prioridades
-        let priorities = {
-            eat: this.calculateEatingPriority(health, timeSinceLastMeal, starvationTime),
-            mate: this.calculateMatingPriority(health, canMate, isInMatingRecovery),
-            rest: this.calculateRestingPriority(health),
-            explore: this.calculateExplorationPriority()
-        };
+        // Se ainda não é hora de mudar de comportamento, mantém o atual
+        if (this.behaviorTimer > 0) return;
 
-        // Escolhe o comportamento com maior prioridade
-        let maxPriority = -1;
-        let chosenBehavior = 'explore';
+        // Define novo timer aleatório
+        this.behaviorTimer = random(this.minBehaviorTime, this.maxBehaviorTime);
 
-        for (let [behavior, priority] of Object.entries(priorities)) {
-            if (priority > maxPriority) {
-                maxPriority = priority;
-                chosenBehavior = behavior;
-            }
-        }
-
-        // Atualiza comportamento
-        this.currentBehavior = chosenBehavior;
-
-        // Se escolheu descansar, define tempo de descanso
-        if (chosenBehavior === 'rest') {
-            this.restTimer = random(this.minRestTime, this.maxRestTime);
+        // Prioridades de comportamento
+        if (timeSinceLastMeal > starvationTime * this.hungerThreshold) {
+            // Com fome
+            this.currentBehavior = 'eat';
+        } else if (health < 30) {
+            // Saúde baixa
+            this.currentBehavior = 'rest';
+        } else if (health > 70 && canMate && !isInMatingRecovery) {
+            // Saudável e pode acasalar
+            this.currentBehavior = 'mate';
+        } else if (random() < this.dna.genes.curiosity) {
+            // Chance de explorar baseada na curiosidade
+            this.currentBehavior = 'explore';
+        } else {
+            // Descansa
+            this.currentBehavior = 'rest';
         }
     }
 
     /**
-     * Calcula prioridade de comer
-     */
-    calculateEatingPriority(health, timeSinceLastMeal, starvationTime) {
-        let hungerFactor = timeSinceLastMeal / starvationTime;
-        let healthFactor = 1 - (health / 100);
-        
-        return (hungerFactor * 0.7 + healthFactor * 0.3) * this.dna.genes.metabolism;
-    }
-
-    /**
-     * Calcula prioridade de acasalar
-     */
-    calculateMatingPriority(health, canMate, isInMatingRecovery) {
-        if (!canMate || isInMatingRecovery || health < 70) return 0;
-        
-        let healthBonus = map(health, 70, 100, 0, 0.3);
-        return this.dna.genes.fertility * 0.7 + healthBonus;
-    }
-
-    /**
-     * Calcula prioridade de descansar
-     */
-    calculateRestingPriority(health) {
-        let healthFactor = 1 - (health / 100);
-        return healthFactor * 0.8 * (1 - this.dna.genes.metabolism);
-    }
-
-    /**
-     * Calcula prioridade de explorar
-     */
-    calculateExplorationPriority() {
-        return this.dna.genes.curiosity * 0.3;
-    }
-
-    /**
-     * Verifica se está em estado de descanso
-     */
-    isRestingState() {
-        return this.currentBehavior === 'rest' && this.restTimer > 0;
-    }
-
-    /**
-     * Processa o consumo de comida
+     * Tenta comer
      * @param {number} nutrition - Valor nutricional da comida
-     * @returns {Object|null} - Resultado do consumo
+     * @returns {Object|null} Resultado da alimentação
      */
     eat(nutrition) {
         if (this.currentBehavior === 'eat') {
@@ -114,6 +64,32 @@ class Behavior {
             };
         }
         return null;
+    }
+
+    /**
+     * Verifica se está em estado de descanso
+     * @returns {boolean} Se está descansando
+     */
+    isRestingState() {
+        return this.currentBehavior === 'rest';
+    }
+
+    /**
+     * Retorna uma descrição do comportamento atual
+     * @returns {Object} Descrição do comportamento
+     */
+    getDescription() {
+        const behaviors = {
+            eat: 'Procurando comida',
+            mate: 'Procurando parceiro',
+            rest: 'Descansando',
+            explore: 'Explorando'
+        };
+
+        return {
+            current: behaviors[this.currentBehavior] || 'Desconhecido',
+            timer: Math.ceil(this.behaviorTimer / 60)
+        };
     }
 }
 

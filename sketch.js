@@ -5,36 +5,54 @@
 
 let simulation;
 let visualization;
+let setupComplete = false;
 
 /**
  * Configuração inicial
  */
 function setup() {
+    // Cria o canvas primeiro
     createCanvas(1000, 600);
     
     // Inicializa a simulação
     simulation = new Simulation();
-    simulation.setup();
     
     // Inicializa o sistema de visualização
-    visualization = new Visualization(simulation);
+    visualization = new SimulationVisualization(simulation);
+    
+    // Aguarda um frame para garantir que todos os sistemas estejam prontos
+    window.setTimeout(() => {
+        // Configura a simulação
+        simulation.setup();
+        setupComplete = true;
+    }, 100);
 }
 
 /**
  * Loop principal
  */
 function draw() {
-    // Atualiza e desenha a simulação
+    if (!setupComplete) return;
+
+    // Limpa a tela
+    background(51);
+
+    // Atualiza a simulação
     simulation.update();
-    simulation.draw();
+    
+    // Desenha a simulação
+    visualization.draw();
+    
+    // Exibe informações
     visualization.displayInfo();
-    visualization.drawTrails();
 }
 
 /**
  * Eventos do mouse
  */
 function mousePressed() {
+    if (!setupComplete) return;
+
     if (mouseX >= 800) return false; // Ignora cliques na área de informações
     if (mouseY >= height) return false;
 
@@ -64,7 +82,7 @@ function mousePressed() {
         }
         
         if (validPosition) {
-            simulation.food.push(new Food(mouseX, mouseY));
+            simulation.addFood(mouseX, mouseY);
         }
         return false;
     }
@@ -119,9 +137,12 @@ function keyPressed() {
         simulation.selectedBacteria = null;
     }
 
+    if (!simulation || !simulation.controls) return;
+
     switch (key) {
         case ' ':  // Espaço - Pausa/Continua
             simulation.paused = !simulation.paused;
+            simulation.controls.pauseButton.html(simulation.paused ? 'Continuar' : 'Pausar');
             break;
         case 'r':  // R - Reinicia
         case 'R':
@@ -131,15 +152,21 @@ function keyPressed() {
             break;
         case 's':  // S - Salva
         case 'S':
-            simulation.controls.onSave();
+            if (simulation.controls.onSave) {
+                simulation.controls.onSave();
+            }
             break;
         case 'l':  // L - Carrega
         case 'L':
-            simulation.controls.onLoad();
+            if (simulation.controls.onLoad) {
+                simulation.controls.onLoad();
+            }
             break;
         case 'e':  // E - Evento aleatório
         case 'E':
-            simulation.controls.onRandomEvent();
+            if (simulation.controls.onRandomEvent) {
+                simulation.controls.onRandomEvent();
+            }
             break;
     }
 } 

@@ -16,6 +16,14 @@ class Simulation {
         this.height = 600;
         this.paused = false;
         this.speed = 1;
+        this.zoom = 1;
+        this.showTrails = false;
+        this.showEnergy = true;
+        this.showGender = true;
+        this.populationLimit = 100;
+        this.initialEnergy = 100;
+        this.foodValue = 30;
+        this.foodRate = 0.5;
 
         // Entidades
         this.bacteria = [];
@@ -23,84 +31,84 @@ class Simulation {
         this.obstacles = [];
 
         // Estatísticas
-        this.stats = {
-            generation: 1,
-            totalBacteria: 0,
-            highestGeneration: 1,
-            births: 0,
-            deaths: 0,
-            foodConsumed: 0,
-            mutations: 0,
-            eventsTriggered: 0
-        };
+        this.initStats();
 
         // Configuração dos controles
         this.setupControls();
     }
 
     /**
-     * Configura os callbacks dos controles
+     * Inicializa as estatísticas
      */
-    setupControls() {
-        this.controls.setCallbacks({
-            onPauseToggle: (isPaused) => {
-                this.paused = isPaused;
-            },
-            onReset: () => {
-                this.reset();
-            },
-            onRandomEvent: () => {
-                const event = this.randomEvents.triggerRandomEvent(this);
-                if (event) {
-                    this.stats.eventsTriggered++;
-                    console.log(`${event.name}: ${event.description}`);
-                }
-            },
-            onSave: () => {
-                if (this.saveSystem.saveState(this.bacteria, this.food, this.obstacles, this.stats)) {
-                    console.log('Estado salvo com sucesso!');
-                }
-            },
-            onLoad: () => {
-                const saves = this.saveSystem.getSavesList();
-                if (saves.length > 0) {
-                    const state = this.saveSystem.loadState(saves[0].id);
-                    if (state) {
-                        this.loadState(state);
-                        console.log('Estado carregado com sucesso!');
-                    }
-                }
-            }
-        });
+    initStats() {
+        this.stats = {
+            generation: 1,
+            totalBacteria: 0,
+            totalBacterias: 0,
+            femaleBacterias: 0,
+            maleBacterias: 0,
+            pregnantBacterias: 0,
+            restingBacterias: 0,
+            hungryBacterias: 0,
+            starvationDeaths: 0,
+            highestGeneration: 1,
+            births: 0,
+            deaths: 0,
+            foodConsumed: 0,
+            mutations: 0,
+            eventsTriggered: 0,
+            averageHealth: 0,
+            totalChildren: 0
+        };
     }
 
     /**
-     * Inicializa a simulação
+     * Atualiza configurações baseado nos controles
      */
-    setup() {
-        // Cria canvas
-        createCanvas(this.width, this.height);
+    updateFromControls() {
+        if (!this.controls) return;
+
+        const state = this.controls.getState();
         
-        // Adiciona bactérias iniciais
-        for (let i = 0; i < 20; i++) {
-            this.addBacteria(
-                random(width),
-                random(height),
-                new DNA()
-            );
-        }
+        // Atualiza configurações
+        this.speed = state.simulationSpeed;
+        this.populationLimit = state.populationLimit;
+        this.initialEnergy = state.initialEnergy;
+        this.foodValue = state.foodValue;
+        this.foodRate = state.foodRate;
+        this.maxObstacles = state.maxObstacles;
+        
+        // Atualiza visualização
+        this.showTrails = state.showTrails;
+        this.showEnergy = state.showEnergy;
+        this.showGender = state.showGender;
+        this.zoom = state.zoom;
 
-        // Adiciona comida inicial
-        for (let i = 0; i < 50; i++) {
-            this.addFood(
-                random(width),
-                random(height),
-                random(20, 40)
-            );
-        }
+        // Atualiza número de obstáculos se necessário
+        this.updateObstacles();
+    }
 
-        // Adiciona obstáculos
-        this.addRandomObstacles(5);
+    /**
+     * Atualiza obstáculos baseado no controle
+     */
+    updateObstacles() {
+        const currentCount = this.obstacles.length;
+        const targetCount = this.maxObstacles;
+
+        if (currentCount < targetCount) {
+            // Adiciona obstáculos
+            for (let i = 0; i < targetCount - currentCount; i++) {
+                this.obstacles.push(new Obstacle(
+                    random(this.width - 100),
+                    random(this.height - 100),
+                    random(20, 100),
+                    random(20, 100)
+                ));
+            }
+        } else if (currentCount > targetCount) {
+            // Remove obstáculos
+            this.obstacles.splice(targetCount);
+        }
     }
 
     /**
@@ -114,6 +122,7 @@ class Simulation {
             this.updateEntities();
             this.checkInteractions();
             this.managePopulation();
+            this.randomEvents.update();
         }
 
         // Atualiza estatísticas
@@ -134,12 +143,12 @@ class Simulation {
         this.bacteria = this.bacteria.filter(bacteria => bacteria.health > 0);
         this.stats.deaths += initialCount - this.bacteria.length;
 
-        // Adiciona nova comida periodicamente
-        if (random() < 0.02 && this.food.length < 100) {
+        // Adiciona nova comida baseado na taxa
+        if (random() < this.foodRate * 0.02 && this.food.length < 100) {
             this.addFood(
-                random(width),
-                random(height),
-                random(20, 40)
+                random(this.width),
+                random(this.height),
+                this.foodValue
             );
         }
     }
@@ -168,11 +177,18 @@ class Simulation {
                 const b1 = this.bacteria[i];
                 const b2 = this.bacteria[j];
                 
-                if (b1.canMateWith(b2)) {
-                    const child = this.createChild(b1, b2);
-                    if (child) {
-                        this.bacteria.push(child);
-                        this.stats.births++;
+                // Verifica se podem acasalar (sexos opostos e saudáveis)
+                if (b1.isFemale !== b2.isFemale && 
+                    b1.health >= 70 && b2.health >= 70 &&
+                    b1.reproduction.canMateNow() && b2.reproduction.canMateNow()) {
+                    
+                    // Tenta acasalar
+                    if (b1.mate(b2)) {
+                        const child = this.createChild(b1, b2);
+                        if (child) {
+                            this.bacteria.push(child);
+                            this.stats.births++;
+                        }
                     }
                 }
             }
@@ -184,7 +200,7 @@ class Simulation {
      */
     managePopulation() {
         // Limita o número máximo de bactérias
-        while (this.bacteria.length > 100) {
+        while (this.bacteria.length > this.populationLimit) {
             const weakest = this.bacteria.reduce((prev, curr) => 
                 prev.health < curr.health ? prev : curr
             );
@@ -201,7 +217,8 @@ class Simulation {
                 this.addBacteria(
                     random(width),
                     random(height),
-                    new DNA()
+                    new DNA(),
+                    this.initialEnergy
                 );
             }
         }
@@ -211,7 +228,51 @@ class Simulation {
      * Atualiza as estatísticas
      */
     updateStats() {
+        // População total
         this.stats.totalBacteria = this.bacteria.length;
+        this.stats.totalBacterias = this.bacteria.length;
+
+        // Contadores
+        this.stats.femaleBacterias = 0;
+        this.stats.maleBacterias = 0;
+        this.stats.pregnantBacterias = 0;
+        this.stats.restingBacterias = 0;
+        this.stats.hungryBacterias = 0;
+        
+        // Saúde média
+        let totalHealth = 0;
+
+        // Atualiza contadores
+        for (let bacteria of this.bacteria) {
+            // Gênero
+            if (bacteria.isFemale) {
+                this.stats.femaleBacterias++;
+            } else {
+                this.stats.maleBacterias++;
+            }
+
+            // Estado reprodutivo
+            if (bacteria.reproduction.isPregnant) {
+                this.stats.pregnantBacterias++;
+            }
+
+            // Estado comportamental
+            if (bacteria.behavior.isRestingState()) {
+                this.stats.restingBacterias++;
+            }
+
+            // Estado de fome
+            if (frameCount - bacteria.lastMealTime > bacteria.starvationTime * 0.7) {
+                this.stats.hungryBacterias++;
+            }
+
+            // Soma saúde
+            totalHealth += bacteria.health;
+        }
+
+        // Calcula saúde média
+        this.stats.averageHealth = this.bacteria.length > 0 ? 
+            totalHealth / this.bacteria.length : 0;
         
         // Atualiza geração mais alta
         const maxGen = this.bacteria.reduce((max, b) => 
@@ -277,8 +338,9 @@ class Simulation {
      * @param {number} y - Posição Y
      * @param {DNA} dna - DNA da bactéria
      */
-    addBacteria(x, y, dna) {
+    addBacteria(x, y, dna, energy = this.initialEnergy) {
         const bacteria = new Bacteria(x, y, dna);
+        bacteria.health = energy;
         this.bacteria.push(bacteria);
         return bacteria;
     }
@@ -289,23 +351,10 @@ class Simulation {
      * @param {number} y - Posição Y
      * @param {number} nutrition - Valor nutricional
      */
-    addFood(x, y, nutrition) {
-        this.food.push(new Food(x, y, nutrition));
-    }
-
-    /**
-     * Adiciona obstáculos aleatórios
-     * @param {number} count - Quantidade de obstáculos
-     */
-    addRandomObstacles(count) {
-        for (let i = 0; i < count; i++) {
-            this.obstacles.push(new Obstacle(
-                random(width - 100),
-                random(height - 100),
-                random(20, 100),
-                random(20, 100)
-            ));
-        }
+    addFood(x, y, nutrition = this.foodValue) {
+        const food = new Food(x, y, nutrition);
+        this.food.push(food);
+        return food;
     }
 
     /**
@@ -319,8 +368,11 @@ class Simulation {
         const x = (parent1.pos.x + parent2.pos.x) / 2;
         const y = (parent1.pos.y + parent2.pos.y) / 2;
 
-        // Combina DNA dos pais
-        const childDNA = parent1.reproduction.createChildDNA(parent2.reproduction);
+        // Determina qual é a mãe
+        const mother = parent1.reproduction.isFemale ? parent1.reproduction : parent2.reproduction;
+
+        // Obtém o DNA do filho
+        const childDNA = mother.giveBirth();
 
         // Chance de mutação
         if (random() < 0.1) {
@@ -341,12 +393,21 @@ class Simulation {
         this.stats = {
             generation: 1,
             totalBacteria: 0,
+            totalBacterias: 0,
+            femaleBacterias: 0,
+            maleBacterias: 0,
+            pregnantBacterias: 0,
+            restingBacterias: 0,
+            hungryBacterias: 0,
+            starvationDeaths: 0,
             highestGeneration: 1,
             births: 0,
             deaths: 0,
             foodConsumed: 0,
             mutations: 0,
-            eventsTriggered: 0
+            eventsTriggered: 0,
+            averageHealth: 0,
+            totalChildren: 0
         };
         this.setup();
     }
@@ -369,6 +430,132 @@ class Simulation {
         );
         
         this.stats = state.stats;
+    }
+
+    /**
+     * Configura os callbacks dos controles
+     */
+    setupControls() {
+        if (!this.controls) return;
+
+        this.controls.setCallbacks({
+            onPauseToggle: (isPaused) => {
+                this.paused = isPaused;
+                console.log('Simulação ' + (isPaused ? 'pausada' : 'continuando'));
+            },
+            onReset: () => {
+                if (confirm('Tem certeza que deseja reiniciar a simulação?')) {
+                    this.reset();
+                    console.log('Simulação reiniciada');
+                }
+            },
+            onRandomEvent: () => {
+                const event = this.randomEvents.triggerRandomEvent(this);
+                if (event) {
+                    this.stats.eventsTriggered++;
+                    console.log(`Evento: ${event.name} - ${event.description}`);
+                }
+            },
+            onSave: () => {
+                if (this.saveSystem.saveState(this.bacteria, this.food, this.obstacles, this.stats)) {
+                    console.log('Estado salvo com sucesso!');
+                }
+            },
+            onLoad: () => {
+                const saves = this.saveSystem.getSavesList();
+                if (saves.length > 0) {
+                    const state = this.saveSystem.loadState(saves[0].id);
+                    if (state) {
+                        this.loadState(state);
+                        console.log('Estado carregado com sucesso!');
+                    }
+                }
+            },
+            onClearFood: () => {
+                this.food = [];
+                console.log('Comida removida');
+            },
+            onClearObstacles: () => {
+                this.obstacles = [];
+                console.log('Obstáculos removidos');
+            },
+            onToggleTrails: (show) => {
+                this.showTrails = show;
+                console.log('Rastros ' + (show ? 'ativados' : 'desativados'));
+            },
+            onToggleEnergy: (show) => {
+                this.showEnergy = show;
+                console.log('Exibição de energia ' + (show ? 'ativada' : 'desativada'));
+            },
+            onToggleGender: (show) => {
+                this.showGender = show;
+                console.log('Exibição de gênero ' + (show ? 'ativada' : 'desativada'));
+            },
+            onChange: (state) => {
+                // Atualiza configurações com validação
+                this.speed = Math.max(0.1, Math.min(2, state.simulationSpeed));
+                this.populationLimit = Math.max(20, Math.min(200, state.populationLimit));
+                this.initialEnergy = Math.max(50, Math.min(150, state.initialEnergy));
+                this.foodValue = Math.max(10, Math.min(50, state.foodValue));
+                this.foodRate = Math.max(0, Math.min(1, state.foodRate));
+                this.maxObstacles = Math.max(0, Math.min(20, state.maxObstacles));
+                
+                // Atualiza visualização
+                this.showTrails = state.showTrails;
+                this.showEnergy = state.showEnergy;
+                this.showGender = state.showGender;
+                this.zoom = Math.max(0.5, Math.min(2, state.zoom));
+
+                // Atualiza número de obstáculos se necessário
+                this.updateObstacles();
+
+                // Log das mudanças
+                console.log('Configurações atualizadas:', {
+                    speed: this.speed,
+                    populationLimit: this.populationLimit,
+                    initialEnergy: this.initialEnergy,
+                    foodValue: this.foodValue,
+                    foodRate: this.foodRate,
+                    maxObstacles: this.maxObstacles,
+                    zoom: this.zoom
+                });
+            }
+        });
+    }
+
+    /**
+     * Inicializa a simulação
+     */
+    setup() {
+        // Adiciona bactérias iniciais
+        for (let i = 0; i < 20; i++) {
+            this.addBacteria(
+                random(this.width),
+                random(this.height),
+                new DNA(),
+                this.initialEnergy
+            );
+        }
+
+        // Adiciona comida inicial
+        for (let i = 0; i < 50; i++) {
+            this.addFood(
+                random(this.width),
+                random(this.height),
+                this.foodValue
+            );
+        }
+
+        // Adiciona obstáculos iniciais
+        const initialObstacles = this.maxObstacles || 5;
+        for (let i = 0; i < initialObstacles; i++) {
+            this.obstacles.push(new Obstacle(
+                random(this.width - 100),
+                random(this.height - 100),
+                random(20, 100),
+                random(20, 100)
+            ));
+        }
     }
 }
 

@@ -29,7 +29,7 @@ class Bacteria {
         this.behavior = new Behavior(this.dna);
         this.reproduction = new Reproduction(this.isFemale);
         this.reproduction.setDNA(this.dna);
-        this.visualization = new Visualization({
+        this.visualization = new BacteriaVisualization({
             size: this.size,
             isFemale: this.isFemale
         });
@@ -37,11 +37,11 @@ class Bacteria {
 
     /**
      * Atualiza o estado da bactéria
-     * @param {Array} obstacles - Lista de obstáculos
      * @param {Array} foods - Lista de comidas
+     * @param {Array} obstacles - Lista de obstáculos
      * @param {Array} others - Lista de outras bactérias
      */
-    update(obstacles, foods, others) {
+    update(foods, obstacles, others) {
         this.age++;
         this.updateHealth();
 

@@ -1,161 +1,191 @@
 /**
- * Sistema de DNA e mutações para as bactérias
+ * Sistema genético das bactérias
  */
 class DNA {
+    /**
+     * Inicializa o DNA
+     * @param {Object} parentDNA - DNA dos pais (opcional)
+     */
     constructor(parentDNA = null) {
-        // Se tiver DNA dos pais, herda com mutações
+        this.generation = parentDNA ? parentDNA.generation + 1 : 1;
+        this.baseLifespan = 1800; // 30 segundos * 60 frames
+        this.genes = this.initializeGenes(parentDNA);
+    }
+
+    /**
+     * Inicializa os genes
+     * @param {Object} parentDNA - DNA dos pais
+     * @returns {Object} Genes inicializados
+     */
+    initializeGenes(parentDNA) {
         if (parentDNA) {
-            this.genes = this.inheritFromParent(parentDNA);
-            this.generation = parentDNA.generation + 1;
-        } else {
-            // Caso contrário, cria genes aleatórios
-            this.genes = this.createRandomGenes();
-            this.generation = 1;
+            return this.mutateGenes(parentDNA.genes);
         }
 
-        // Calcula atributos baseados nos genes
-        this.calculateAttributes();
-    }
-
-    /**
-     * Cria genes aleatórios para uma nova bactéria
-     */
-    createRandomGenes() {
         return {
-            // Genes de sobrevivência
-            metabolism: random(0.5, 1.5),      // Taxa de consumo de energia
-            immunity: random(0.3, 0.7),        // Resistência a eventos negativos
-            regeneration: random(0.2, 0.8),    // Capacidade de recuperação de saúde
+            // Atributos físicos
+            metabolism: random(0.5, 1.5),    // Taxa de consumo de energia
+            immunity: random(0.5, 1.5),      // Resistência a doenças
+            regeneration: random(0.5, 1.5),  // Velocidade de recuperação
+            speed: random(0.5, 1.5),         // Velocidade de movimento
+            size: random(0.8, 1.2),          // Tamanho relativo
+
+            // Atributos comportamentais
+            aggressiveness: random(0, 1),    // Tendência a atacar
+            sociability: random(0, 1),       // Tendência a se agrupar
+            curiosity: random(0, 1),         // Tendência a explorar
             
-            // Genes de comportamento
-            aggression: random(0.2, 0.8),      // Influencia comportamento territorial
-            sociability: random(0.3, 0.7),     // Tendência a se agrupar
-            curiosity: random(0.4, 0.6),       // Tendência a explorar
-            
-            // Genes de movimento
-            speed: random(0.5, 1.5),           // Velocidade de movimento
-            agility: random(0.4, 0.6),         // Capacidade de desviar de obstáculos
-            perception: random(0.6, 1.4),      // Raio de percepção
-            
-            // Genes de reprodução
-            fertility: random(0.3, 0.7),       // Taxa de fertilidade
-            matingEnergy: random(0.4, 0.6),    // Energia necessária para reprodução
-            offspringSize: random(0.8, 1.2),   // Tamanho da prole
-            
-            // Genes de adaptação
-            mutationRate: random(0.01, 0.05),  // Taxa de mutação própria
-            adaptability: random(0.3, 0.7),    // Capacidade de adaptação a mudanças
-            
-            // Genes de aparência
-            size: random(0.8, 1.2),            // Modificador de tamanho
-            color: {                           // Variações de cor
-                r: random(-20, 20),
-                g: random(-20, 20),
-                b: random(-20, 20)
+            // Atributos reprodutivos
+            fertility: random(0.5, 1.5),     // Taxa de reprodução
+            mutationRate: random(0.01, 0.1), // Taxa de mutação
+            adaptability: random(0.5, 1.5),  // Capacidade de adaptação
+
+            // Atributos de aparência
+            color: {
+                r: random(-50, 50),
+                g: random(-50, 50),
+                b: random(-50, 50)
             }
         };
     }
 
     /**
-     * Herda genes dos pais com possíveis mutações
+     * Aplica mutações aos genes
+     * @param {Object} parentGenes - Genes dos pais
+     * @returns {Object} Genes mutados
      */
-    inheritFromParent(parentDNA) {
-        const genes = {};
-        const mutationRate = parentDNA.genes.mutationRate;
-        
-        // Para cada gene do pai
-        for (let [key, value] of Object.entries(parentDNA.genes)) {
-            if (key === 'color') {
-                genes[key] = {
-                    r: this.mutateValue(value.r, -20, 20, mutationRate),
-                    g: this.mutateValue(value.g, -20, 20, mutationRate),
-                    b: this.mutateValue(value.b, -20, 20, mutationRate)
+    mutateGenes(parentGenes) {
+        const mutatedGenes = {};
+        const mutationRate = parentGenes.mutationRate;
+
+        for (let gene in parentGenes) {
+            if (gene === 'color') {
+                mutatedGenes.color = {
+                    r: this.mutateValue(parentGenes.color.r, -50, 50, mutationRate),
+                    g: this.mutateValue(parentGenes.color.g, -50, 50, mutationRate),
+                    b: this.mutateValue(parentGenes.color.b, -50, 50, mutationRate)
                 };
-            } else if (typeof value === 'number') {
-                // Define limites específicos para cada tipo de gene
-                const limits = this.getGeneLimits(key);
-                genes[key] = this.mutateValue(value, limits.min, limits.max, mutationRate);
+            } else {
+                const range = this.getGeneRange(gene);
+                mutatedGenes[gene] = this.mutateValue(
+                    parentGenes[gene],
+                    range.min,
+                    range.max,
+                    mutationRate
+                );
             }
         }
-        
-        return genes;
+
+        return mutatedGenes;
     }
 
     /**
-     * Retorna os limites de valores para cada tipo de gene
+     * Retorna o intervalo válido para cada gene
+     * @param {string} gene - Nome do gene
+     * @returns {Object} Intervalo mínimo e máximo
      */
-    getGeneLimits(geneType) {
-        const limits = {
-            metabolism: { min: 0.3, max: 2.0 },
-            immunity: { min: 0.1, max: 0.9 },
-            regeneration: { min: 0.1, max: 1.0 },
-            aggression: { min: 0.1, max: 0.9 },
-            sociability: { min: 0.2, max: 0.8 },
-            curiosity: { min: 0.2, max: 0.8 },
-            speed: { min: 0.3, max: 2.0 },
-            agility: { min: 0.2, max: 0.8 },
-            perception: { min: 0.4, max: 2.0 },
-            fertility: { min: 0.2, max: 0.8 },
-            matingEnergy: { min: 0.3, max: 0.7 },
-            offspringSize: { min: 0.6, max: 1.4 },
+    getGeneRange(gene) {
+        const ranges = {
+            metabolism: { min: 0.5, max: 1.5 },
+            immunity: { min: 0.5, max: 1.5 },
+            regeneration: { min: 0.5, max: 1.5 },
+            speed: { min: 0.5, max: 1.5 },
+            size: { min: 0.8, max: 1.2 },
+            aggressiveness: { min: 0, max: 1 },
+            sociability: { min: 0, max: 1 },
+            curiosity: { min: 0, max: 1 },
+            fertility: { min: 0.5, max: 1.5 },
             mutationRate: { min: 0.01, max: 0.1 },
-            adaptability: { min: 0.2, max: 0.8 },
-            size: { min: 0.6, max: 1.4 }
+            adaptability: { min: 0.5, max: 1.5 }
         };
-        
-        return limits[geneType] || { min: 0, max: 1 };
+
+        return ranges[gene] || { min: 0, max: 1 };
     }
 
     /**
-     * Aplica mutação a um valor numérico
+     * Aplica mutação a um valor
+     * @param {number} value - Valor original
+     * @param {number} min - Valor mínimo
+     * @param {number} max - Valor máximo
+     * @param {number} mutationRate - Taxa de mutação
+     * @returns {number} Valor mutado
      */
     mutateValue(value, min, max, mutationRate) {
         if (random() < mutationRate) {
-            // Quanto maior a adaptabilidade, mais controlada é a mutação
-            const adaptFactor = this.genes?.adaptability || 0.5;
-            const mutationRange = (max - min) * (1 - adaptFactor);
-            const mutation = random(-mutationRange, mutationRange);
-            
-            return constrain(value + mutation, min, max);
+            const change = random(-0.1, 0.1);
+            return constrain(value + change, min, max);
         }
         return value;
     }
 
     /**
-     * Calcula atributos baseados nos genes
+     * Combina dois DNAs para criar um novo
+     * @param {DNA} partner - DNA do parceiro
+     * @returns {DNA} Novo DNA combinado
      */
-    calculateAttributes() {
-        // Tempo de vida base em frames (60fps * segundos)
-        this.baseLifespan = DNA.hoursToFrames(2) * this.genes.metabolism;
-        
-        // Atração por comida e parceiros
-        this.foodAttraction = map(this.genes.metabolism, 0.5, 1.5, 0.8, 1.2);
-        this.mateAttraction = map(this.genes.fertility, 0.3, 0.7, 0.7, 1.3);
-        
-        // Velocidade de movimento
-        this.maxSpeed = map(this.genes.speed, 0.5, 1.5, 2, 4);
-        this.maxForce = map(this.genes.agility, 0.4, 0.6, 0.1, 0.2);
+    combine(partner) {
+        const childDNA = new DNA();
+        childDNA.generation = max(this.generation, partner.generation) + 1;
+
+        for (let gene in this.genes) {
+            if (gene === 'color') {
+                childDNA.genes.color = {
+                    r: random() < 0.5 ? this.genes.color.r : partner.genes.color.r,
+                    g: random() < 0.5 ? this.genes.color.g : partner.genes.color.g,
+                    b: random() < 0.5 ? this.genes.color.b : partner.genes.color.b
+                };
+            } else {
+                childDNA.genes[gene] = random() < 0.5 ? 
+                    this.genes[gene] : partner.genes[gene];
+            }
+        }
+
+        return childDNA;
     }
 
     /**
-     * Converte horas em frames (60fps)
-     */
-    static hoursToFrames(hours) {
-        return hours * 60 * 60;
-    }
-
-    /**
-     * Retorna uma descrição dos genes para debug
+     * Retorna uma descrição dos genes
+     * @returns {Object} Descrição dos genes
      */
     getDescription() {
         return {
             generation: this.generation,
             metabolism: this.genes.metabolism.toFixed(2),
             immunity: this.genes.immunity.toFixed(2),
+            regeneration: this.genes.regeneration.toFixed(2),
             speed: this.genes.speed.toFixed(2),
+            size: this.genes.size.toFixed(2),
+            aggressiveness: this.genes.aggressiveness.toFixed(2),
+            sociability: this.genes.sociability.toFixed(2),
+            curiosity: this.genes.curiosity.toFixed(2),
             fertility: this.genes.fertility.toFixed(2),
-            mutationRate: this.genes.mutationRate.toFixed(3)
+            mutationRate: this.genes.mutationRate.toFixed(3),
+            adaptability: this.genes.adaptability.toFixed(2)
         };
+    }
+
+    /**
+     * Aplica mutação aos genes
+     * @param {number} mutationRate - Taxa de mutação
+     */
+    mutate(mutationRate) {
+        for (let gene in this.genes) {
+            if (gene === 'color') {
+                this.genes.color = {
+                    r: this.mutateValue(this.genes.color.r, -50, 50, mutationRate),
+                    g: this.mutateValue(this.genes.color.g, -50, 50, mutationRate),
+                    b: this.mutateValue(this.genes.color.b, -50, 50, mutationRate)
+                };
+            } else {
+                const range = this.getGeneRange(gene);
+                this.genes[gene] = this.mutateValue(
+                    this.genes[gene],
+                    range.min,
+                    range.max,
+                    mutationRate
+                );
+            }
+        }
     }
 }
 

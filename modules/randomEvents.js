@@ -11,6 +11,7 @@ class RandomEvents {
                 name: 'Tempestade',
                 description: 'Uma tempestade agita o ambiente!',
                 probability: 0.2,
+                duration: 300, // 5 segundos
                 effect: (simulation) => {
                     // Agita todas as bactérias e comida
                     const force = 5;
@@ -29,6 +30,7 @@ class RandomEvents {
                 name: 'Onda de Calor',
                 description: 'Uma onda de calor afeta o metabolismo das bactérias!',
                 probability: 0.15,
+                duration: 600, // 10 segundos
                 effect: (simulation) => {
                     // Aumenta o consumo de energia
                     simulation.bacteria.forEach(bacteria => {
@@ -40,6 +42,7 @@ class RandomEvents {
                 name: 'Chuva de Nutrientes',
                 description: 'Uma chuva de nutrientes enriquece o ambiente!',
                 probability: 0.2,
+                duration: 180, // 3 segundos
                 effect: (simulation) => {
                     // Adiciona comida extra
                     const amount = floor(random(10, 20));
@@ -56,6 +59,7 @@ class RandomEvents {
                 name: 'Mutação Espontânea',
                 description: 'Radiação causa mutações espontâneas!',
                 probability: 0.1,
+                duration: 300, // 5 segundos
                 effect: (simulation) => {
                     // Causa mutações aleatórias
                     simulation.bacteria.forEach(bacteria => {
@@ -72,6 +76,7 @@ class RandomEvents {
                 name: 'Epidemia',
                 description: 'Uma epidemia afeta as bactérias mais fracas!',
                 probability: 0.1,
+                duration: 450, // 7.5 segundos
                 effect: (simulation) => {
                     // Afeta bactérias com baixa imunidade
                     simulation.bacteria.forEach(bacteria => {
@@ -86,6 +91,7 @@ class RandomEvents {
                 name: 'Migração',
                 description: 'Um grupo de bactérias migrou para o ambiente!',
                 probability: 0.1,
+                duration: 120, // 2 segundos
                 effect: (simulation) => {
                     // Adiciona novas bactérias com DNA aleatório
                     const amount = floor(random(3, 8));
@@ -102,6 +108,7 @@ class RandomEvents {
                 name: 'Terremoto',
                 description: 'Um terremoto reorganiza o ambiente!',
                 probability: 0.05,
+                duration: 180, // 3 segundos
                 effect: (simulation) => {
                     // Reorganiza obstáculos e comida
                     simulation.obstacles.forEach(obstacle => {
@@ -120,7 +127,7 @@ class RandomEvents {
             }
         ];
 
-        this.activeEffects = new Map();
+        this.activeEvents = new Map();
         this.eventHistory = [];
     }
 
@@ -140,25 +147,48 @@ class RandomEvents {
             event.effect(simulation);
             
             // Registra o evento
-            this.eventHistory.push({
+            const eventInfo = {
                 name: event.name,
                 description: event.description,
-                timestamp: Date.now()
-            });
+                timestamp: Date.now(),
+                remainingDuration: event.duration
+            };
+
+            // Adiciona aos eventos ativos
+            this.activeEvents.set(event.name, eventInfo);
+
+            // Adiciona ao histórico
+            this.eventHistory.push(eventInfo);
 
             // Mantém apenas os últimos 10 eventos no histórico
             if (this.eventHistory.length > 10) {
                 this.eventHistory.shift();
             }
 
-            // Retorna informações do evento
-            return {
-                name: event.name,
-                description: event.description
-            };
+            return eventInfo;
         }
 
         return null;
+    }
+
+    /**
+     * Atualiza os eventos ativos
+     */
+    update() {
+        for (let [name, event] of this.activeEvents) {
+            event.remainingDuration--;
+            if (event.remainingDuration <= 0) {
+                this.activeEvents.delete(name);
+            }
+        }
+    }
+
+    /**
+     * Retorna os eventos ativos
+     * @returns {Array} Lista de eventos ativos
+     */
+    getActiveEvents() {
+        return Array.from(this.activeEvents.values());
     }
 
     /**
@@ -174,6 +204,7 @@ class RandomEvents {
      */
     clearEventHistory() {
         this.eventHistory = [];
+        this.activeEvents.clear();
     }
 }
 

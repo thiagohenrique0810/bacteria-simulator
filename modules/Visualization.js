@@ -1,7 +1,7 @@
 /**
- * Classe responsável pela visualização das bactérias
+ * Sistema de visualização das bactérias
  */
-class Visualization {
+class BacteriaVisualization {
     /**
      * Inicializa o sistema de visualização
      * @param {Object} params - Parâmetros de visualização
@@ -125,345 +125,203 @@ class Visualization {
     }
 }
 
-// Tornando a classe global
-window.Visualization = Visualization; 
-
 /**
  * Sistema de visualização da simulação
  */
-class Visualization {
-    constructor(simulation) {
-        this.simulation = simulation;
-    }
-
-    /**
-     * Desenha as informações na tela
-     */
-    displayInfo() {
-        push();
-        fill(255);
-        noStroke();
-        textSize(16);
-        textAlign(LEFT);
-
-        // Área de estatísticas (à direita)
-        let x = 820;
-        let y = 30;
-        let lineHeight = 28;
-
-        // Título
-        textStyle(BOLD);
-        text("ESTATÍSTICAS", x, y);
-        y += lineHeight + 10;
-        textStyle(NORMAL);
-
-        // População
-        text("POPULAÇÃO", x, y);
-        y += lineHeight;
-        text(`Total: ${this.simulation.stats.totalBacterias}`, x, y);
-        y += lineHeight;
-        text(`Fêmeas: ${this.simulation.stats.femaleBacterias}`, x, y);
-        y += lineHeight;
-        text(`Machos: ${this.simulation.stats.maleBacterias}`, x, y);
-        y += lineHeight;
-        text(`Grávidas: ${this.simulation.stats.pregnantBacterias}`, x, y);
-        y += lineHeight;
-        text(`Filhos Gerados: ${this.simulation.stats.totalChildren}`, x, y);
-        y += lineHeight + 10;
-
-        // Saúde e Geração
-        text("SAÚDE E EVOLUÇÃO", x, y);
-        y += lineHeight;
-        text(`Geração: ${this.simulation.stats.highestGeneration}`, x, y);
-        y += lineHeight;
-        text(`Saúde: ${this.simulation.stats.averageHealth.toFixed(1)}`, x, y);
-        y += lineHeight + 10;
-
-        // Estado
-        text("ESTADO", x, y);
-        y += lineHeight;
-        text(`Descansando: ${this.simulation.stats.restingBacterias}`, x, y);
-        y += lineHeight;
-        text(`Com fome: ${this.simulation.stats.hungryBacterias}`, x, y);
-        y += lineHeight;
-        text(`Mortes/fome: ${this.simulation.stats.starvationDeaths}`, x, y);
-        y += lineHeight + 10;
-
-        // Ambiente
-        text("AMBIENTE", x, y);
-        y += lineHeight;
-        text(`Comida: ${this.simulation.food.length}`, x, y);
-        y += lineHeight;
-        text(`Obstáculos: ${this.simulation.obstacles.length}`, x, y);
-
-        // Eventos Ativos
-        const activeEvents = this.simulation.randomEvents.getActiveEvents();
-        if (activeEvents.length > 0) {
-            y += lineHeight + 10;
-            text("EVENTOS ATIVOS", x, y);
-            y += lineHeight;
-            
-            for (let event of activeEvents) {
-                text(`${event.name} (${Math.ceil(event.remainingDuration/60)}s)`, x, y);
-                y += lineHeight;
-            }
-        }
-
-        // Debug Info
-        if (this.simulation.controls.showDebug) {
-            this.displayDebugInfo(x, y + lineHeight);
-        }
-
-        pop();
-    }
-
-    /**
-     * Exibe informações de debug
-     */
-    displayDebugInfo(x, y) {
-        push();
-        fill(255, 255, 0);
-        textSize(14);
-        text("DEBUG INFO", x, y);
-        y += 20;
-
-        // Se houver uma bactéria selecionada
-        if (this.simulation.selectedBacteria) {
-            const b = this.simulation.selectedBacteria;
-            const genes = b.dna.getDescription();
-            
-            text("Bactéria Selecionada:", x, y);
-            y += 20;
-            
-            const info = [
-                `Geração: ${genes.generation}`,
-                `Metabolismo: ${genes.metabolism}`,
-                `Imunidade: ${genes.immunity}`,
-                `Velocidade: ${genes.speed}`,
-                `Fertilidade: ${genes.fertility}`,
-                `Taxa Mutação: ${genes.mutationRate}`,
-                `Saúde: ${b.health.toFixed(1)}`,
-                `Estado: ${b.behavior.currentBehavior}`,
-                `Última Refeição: ${Math.floor((frameCount - b.lastMealTime)/60)}s atrás`
-            ];
-
-            for (let line of info) {
-                text(line, x + 10, y);
-                y += 18;
-            }
-        }
-        pop();
-    }
-
-    /**
-     * Desenha trilhas das bactérias
-     */
-    drawTrails() {
-        if (!this.simulation.showTrails) return;
-
-        push();
-        noFill();
-        strokeWeight(1);
-        
-        for (let b of this.simulation.bacteria) {
-            if (!b.trail) b.trail = [];
-            
-            // Adiciona posição atual à trilha
-            b.trail.push(b.pos.copy());
-            
-            // Limita o tamanho da trilha
-            if (b.trail.length > 30) {
-                b.trail.shift();
-            }
-
-            // Desenha a trilha
-            beginShape();
-            for (let i = 0; i < b.trail.length; i++) {
-                const alpha = map(i, 0, b.trail.length, 0, 255);
-                stroke(255, alpha * 0.2);
-                vertex(b.trail[i].x, b.trail[i].y);
-            }
-            endShape();
-        }
-        pop();
-    }
-} 
-
-/**
- * Sistema de visualização para as bactérias
- */
-class Visualization {
+class SimulationVisualization {
     /**
      * Inicializa o sistema de visualização
-     * @param {DNA} dna - DNA da bactéria
-     * @param {number} size - Tamanho base da bactéria
+     * @param {Simulation} simulation - Referência para a simulação
      */
-    constructor(dna, size) {
-        this.dna = dna;
-        this.baseSize = size;
-        this.currentSize = size * dna.genes.size;
-        this.baseColor = color(100, 150, 200);
-        this.calculateColor();
+    constructor(simulation) {
+        this.simulation = simulation;
+        this.trails = [];
+        this.maxTrails = 100;
     }
 
     /**
-     * Calcula a cor da bactéria baseada no DNA
+     * Desenha a simulação
      */
-    calculateColor() {
-        const genes = this.dna.genes;
-        this.color = color(
-            constrain(red(this.baseColor) + genes.color.r, 0, 255),
-            constrain(green(this.baseColor) + genes.color.g, 0, 255),
-            constrain(blue(this.baseColor) + genes.color.b, 0, 255)
-        );
-    }
-
-    /**
-     * Desenha a bactéria
-     * @param {p5.Vector} position - Posição da bactéria
-     * @param {number} health - Saúde atual da bactéria
-     * @param {string} currentBehavior - Comportamento atual
-     * @param {boolean} isPregnant - Se está grávida
-     * @param {boolean} isFemale - Se é fêmea
-     */
-    draw(position, health, currentBehavior, isPregnant, isFemale) {
+    draw() {
         push();
-        translate(position.x, position.y);
+        
+        // Aplica zoom
+        translate(width/2, height/2);
+        scale(this.simulation.zoom || 1);
+        translate(-width/2, -height/2);
 
-        // Desenha o corpo principal
-        this.drawBody(health);
+        // Limpa a tela
+        background(51);
 
-        // Desenha indicadores de estado
-        this.drawStateIndicators(currentBehavior, isPregnant, isFemale);
+        // Desenha os rastros se ativado
+        if (this.simulation.showTrails) {
+            this.drawTrails();
+        }
+
+        // Desenha os elementos
+        this.drawObstacles();
+        this.drawFood();
+        this.drawBacteria();
 
         pop();
     }
 
     /**
-     * Desenha o corpo principal da bactéria
-     * @param {number} health - Saúde atual
+     * Desenha os rastros das bactérias
      */
-    drawBody(health) {
-        // Ajusta a transparência baseada na saúde
-        const alpha = map(health, 0, 100, 100, 255);
-        const currentColor = color(
-            red(this.color),
-            green(this.color),
-            blue(this.color),
-            alpha
-        );
+    drawTrails() {
+        // Adiciona novas posições aos rastros
+        if (frameCount % 5 === 0) {
+            const newTrails = this.simulation.bacteria.map(b => ({
+                x: b.pos.x,
+                y: b.pos.y,
+                alpha: 255
+            }));
+            this.trails.push(...newTrails);
 
-        // Corpo principal
-        fill(currentColor);
+            // Limita o número de rastros
+            while (this.trails.length > this.maxTrails) {
+                this.trails.shift();
+            }
+        }
+
+        // Desenha os rastros
         noStroke();
-        ellipse(0, 0, this.currentSize, this.currentSize);
+        for (let i = this.trails.length - 1; i >= 0; i--) {
+            const trail = this.trails[i];
+            trail.alpha = max(0, trail.alpha - 2);
+            
+            if (trail.alpha <= 0) {
+                this.trails.splice(i, 1);
+                continue;
+            }
 
-        // Borda suave
-        stroke(currentColor);
-        strokeWeight(2);
-        noFill();
-        ellipse(0, 0, this.currentSize + 2, this.currentSize + 2);
+            fill(255, trail.alpha * 0.4);
+            circle(trail.x, trail.y, 4);
+        }
     }
 
     /**
-     * Desenha indicadores de estado da bactéria
-     * @param {string} currentBehavior - Comportamento atual
-     * @param {boolean} isPregnant - Se está grávida
-     * @param {boolean} isFemale - Se é fêmea
+     * Desenha as bactérias
      */
-    drawStateIndicators(currentBehavior, isPregnant, isFemale) {
-        const size = this.currentSize;
+    drawBacteria() {
+        for (let bacteria of this.simulation.bacteria) {
+            push();
+            translate(bacteria.pos.x, bacteria.pos.y);
+            
+            // Verifica se há ângulo válido antes de rotacionar
+            if (typeof bacteria.movement?.angle === 'number') {
+                rotate(bacteria.movement.angle);
+            }
 
-        // Indicador de gênero
-        if (isFemale) {
-            stroke(255, 150, 200, 200);
-            strokeWeight(2);
-            noFill();
-            circle(0, size/3, size/4);
-        } else {
-            stroke(150, 200, 255, 200);
-            strokeWeight(2);
-            line(-size/8, -size/3, size/8, -size/3);
-            line(0, -size/3, 0, -size/4);
-        }
-
-        // Indicador de gravidez
-        if (isPregnant) {
+            // Corpo da bactéria
             noStroke();
-            fill(255, 255, 200, 150);
-            ellipse(0, 0, size/2, size/2);
-        }
+            // Usa cor padrão se a cor da bactéria não estiver definida
+            fill(bacteria.color || color(200, 200, 200));
+            ellipse(0, 0, bacteria.size || 20, (bacteria.size || 20) * 0.7);
 
-        // Indicador de comportamento
-        this.drawBehaviorIndicator(currentBehavior);
+            // Indicador de gênero se ativado
+            if (this.simulation.showGender) {
+                stroke(255);
+                strokeWeight(1);
+                const size = bacteria.size || 20;
+                if (bacteria.isFemale) {
+                    circle(0, size * 0.4, size * 0.2);
+                } else {
+                    line(0, size * 0.3, 0, size * 0.5);
+                    line(-size * 0.1, size * 0.4, size * 0.1, size * 0.4);
+                }
+            }
+
+            // Barra de energia se ativada
+            if (this.simulation.showEnergy) {
+                const size = bacteria.size || 20;
+                const energyWidth = size * 1.2;
+                const energyHeight = 3;
+                const energyY = -size * 0.7;
+                
+                // Fundo da barra
+                noStroke();
+                fill(0, 100);
+                rect(-energyWidth/2, energyY, energyWidth, energyHeight);
+                
+                // Barra de energia
+                const health = bacteria.health || 0;
+                const energyLevel = map(health, 0, 100, 0, energyWidth);
+                fill(lerpColor(color(255, 0, 0), color(0, 255, 0), health/100));
+                rect(-energyWidth/2, energyY, energyLevel, energyHeight);
+            }
+
+            pop();
+        }
     }
 
     /**
-     * Desenha indicador do comportamento atual
-     * @param {string} behavior - Comportamento atual
+     * Desenha a comida
      */
-    drawBehaviorIndicator(behavior) {
-        const size = this.currentSize;
-        noStroke();
-
-        switch(behavior) {
-            case 'eating':
-                fill(0, 255, 0, 150);
-                circle(-size/3, -size/3, size/4);
-                break;
-            case 'mating':
-                fill(255, 150, 150, 150);
-                heart(-size/3, -size/3, size/4);
-                break;
-            case 'resting':
-                fill(100, 100, 255, 150);
-                ellipse(-size/3, -size/3, size/4, size/6);
-                break;
-            case 'exploring':
-                fill(255, 200, 0, 150);
-                star(-size/3, -size/3, size/8, size/4, 5);
-                break;
+    drawFood() {
+        for (let food of this.simulation.food) {
+            if (!food.position) continue;
+            const size = map(food.nutrition || 30, 10, 50, 5, 15);
+            fill(0, 255, 0);
+            noStroke();
+            circle(food.position.x, food.position.y, size);
         }
     }
+
+    /**
+     * Desenha os obstáculos
+     */
+    drawObstacles() {
+        fill(100);
+        stroke(200);
+        strokeWeight(2);
+        for (let obstacle of this.simulation.obstacles) {
+            // Usa w/h ou width/height, o que estiver disponível
+            const w = obstacle.w || obstacle.width || 20;
+            const h = obstacle.h || obstacle.height || 20;
+            rect(obstacle.x, obstacle.y, w, h);
+        }
+    }
+
+    /**
+     * Exibe informações da simulação
+     */
+    displayInfo() {
+        if (!this.simulation.controls?.statsCheckbox?.checked()) return;
+
+        const stats = this.simulation.stats || {};
+        const x = 810;
+        let y = 20;
+        const lineHeight = 20;
+
+        fill(255);
+        noStroke();
+        textAlign(LEFT);
+        textSize(14);
+
+        // Informações gerais
+        text(`Geração: ${stats.generation || 1}`, x, y); y += lineHeight;
+        text(`População: ${stats.totalBacteria || 0}`, x, y); y += lineHeight;
+        text(`Fêmeas: ${stats.femaleBacterias || 0}`, x, y); y += lineHeight;
+        text(`Machos: ${stats.maleBacterias || 0}`, x, y); y += lineHeight;
+        y += lineHeight;
+
+        // Estatísticas vitais
+        text(`Nascimentos: ${stats.births || 0}`, x, y); y += lineHeight;
+        text(`Mortes: ${stats.deaths || 0}`, x, y); y += lineHeight;
+        text(`Comida Consumida: ${stats.foodConsumed || 0}`, x, y); y += lineHeight;
+        text(`Mutações: ${stats.mutations || 0}`, x, y); y += lineHeight;
+        y += lineHeight;
+
+        // Estado atual
+        text(`Eventos: ${stats.eventsTriggered || 0}`, x, y); y += lineHeight;
+        text(`Saúde Média: ${(stats.averageHealth || 0).toFixed(1)}`, x, y); y += lineHeight;
+        text(`Comida Disponível: ${this.simulation.food?.length || 0}`, x, y); y += lineHeight;
+        text(`Obstáculos: ${this.simulation.obstacles?.length || 0}`, x, y);
+    }
 }
 
-/**
- * Desenha um coração
- * @param {number} x - Posição X
- * @param {number} y - Posição Y
- * @param {number} size - Tamanho
- */
-function heart(x, y, size) {
-    beginShape();
-    for (let a = 0; a < TWO_PI; a += 0.01) {
-        let r = size * (1 - sin(a));
-        let px = r * 16 * pow(sin(a), 3);
-        let py = -r * (13 * cos(a) - 5 * cos(2*a) - 2 * cos(3*a) - cos(4*a));
-        vertex(x + px/16, y + py/16);
-    }
-    endShape(CLOSE);
-}
-
-/**
- * Desenha uma estrela
- * @param {number} x - Posição X
- * @param {number} y - Posição Y
- * @param {number} radius1 - Raio interno
- * @param {number} radius2 - Raio externo
- * @param {number} npoints - Número de pontas
- */
-function star(x, y, radius1, radius2, npoints) {
-    let angle = TWO_PI / npoints;
-    let halfAngle = angle/2.0;
-    
-    beginShape();
-    for (let a = 0; a < TWO_PI; a += angle) {
-        let sx = x + cos(a) * radius2;
-        let sy = y + sin(a) * radius2;
-        vertex(sx, sy);
-        sx = x + cos(a+halfAngle) * radius1;
-        sy = y + sin(a+halfAngle) * radius1;
-        vertex(sx, sy);
-    }
-    endShape(CLOSE);
-} 
+// Tornando as classes globais
+window.BacteriaVisualization = BacteriaVisualization;
+window.SimulationVisualization = SimulationVisualization; 

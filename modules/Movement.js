@@ -125,15 +125,20 @@ class Movement {
         let nearestDistance = Infinity;
 
         for (let obstacle of obstacles) {
+            // Verifica se o obstáculo é uma instância válida
+            if (!(obstacle instanceof window.Obstacle)) {
+                console.error('Obstáculo inválido:', obstacle);
+                continue;
+            }
+
             // Verifica colisão com o ponto à frente
             if (obstacle.collidesWith(ahead, size/2)) {
                 // Calcula distância até o obstáculo
-                let d = dist(
-                    this.position.x,
-                    this.position.y,
+                let obstacleCenter = createVector(
                     obstacle.x + obstacle.w/2,
                     obstacle.y + obstacle.h/2
                 );
+                let d = this.position.dist(obstacleCenter);
                 
                 if (d < nearestDistance) {
                     nearestDistance = d;
@@ -144,11 +149,13 @@ class Movement {
 
         // Se encontrou obstáculo, evita
         if (nearestObstacle) {
-            // Calcula vetor de fuga
-            let escape = createVector(
-                this.position.x - (nearestObstacle.x + nearestObstacle.w/2),
-                this.position.y - (nearestObstacle.y + nearestObstacle.h/2)
+            let obstacleCenter = createVector(
+                nearestObstacle.x + nearestObstacle.w/2,
+                nearestObstacle.y + nearestObstacle.h/2
             );
+            
+            // Calcula vetor de fuga
+            let escape = p5.Vector.sub(this.position, obstacleCenter);
             escape.normalize();
             escape.mult(AVOID_FORCE);
             this.applyForce(escape);

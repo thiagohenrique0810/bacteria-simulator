@@ -105,6 +105,21 @@ class Controls {
         this.initialEnergySlider.elt.type = 'range';
         this.addControlRow(simDiv, 'Energia Inicial:', this.initialEnergySlider);
 
+        // Slider para tempo de vida base (em horas)
+        this.lifespanSlider = createSlider(1, 24, 12, 1);
+        this.lifespanSlider.elt.type = 'range';
+        this.addControlRow(simDiv, 'Tempo de Vida (h):', this.lifespanSlider);
+
+        // Slider para taxa de perda de saúde
+        this.healthLossSlider = createSlider(0.01, 0.2, 0.05, 0.01);
+        this.healthLossSlider.elt.type = 'range';
+        this.addControlRow(simDiv, 'Perda de Saúde:', this.healthLossSlider);
+
+        // Slider para intervalo de alimentação (em minutos)
+        this.feedingIntervalSlider = createSlider(1, 60, 30, 1);
+        this.feedingIntervalSlider.elt.type = 'range';
+        this.addControlRow(simDiv, 'Intervalo Alimentação (min):', this.feedingIntervalSlider);
+
         simDiv.child(popControlsDiv);
     }
 
@@ -370,6 +385,33 @@ class Controls {
                 this.onToggleGender(this.showGenderCheckbox.checked());
             }
         });
+
+        // Eventos de simulação
+        this.speedSlider.input(() => {
+            if (this.callbacks.onSpeedChange) {
+                this.callbacks.onSpeedChange(this.speedSlider.value());
+            }
+        });
+
+        this.lifespanSlider.input(() => {
+            if (this.callbacks.onLifespanChange) {
+                // Converte horas para frames (1 hora = 3600 segundos * 60 frames)
+                this.callbacks.onLifespanChange(this.lifespanSlider.value() * 3600 * 60);
+            }
+        });
+
+        this.healthLossSlider.input(() => {
+            if (this.callbacks.onHealthLossChange) {
+                this.callbacks.onHealthLossChange(this.healthLossSlider.value());
+            }
+        });
+
+        this.feedingIntervalSlider.input(() => {
+            if (this.callbacks.onFeedingIntervalChange) {
+                // Converte minutos para frames (1 minuto = 60 segundos * 60 frames)
+                this.callbacks.onFeedingIntervalChange(this.feedingIntervalSlider.value() * 60 * 60);
+            }
+        });
     }
 
     /**
@@ -426,6 +468,7 @@ class Controls {
         this.onToggleEnergy = callbacks.onToggleEnergy;
         this.onToggleGender = callbacks.onToggleGender;
         this.onChange = callbacks.onChange;
+        this.callbacks = callbacks;
     }
 
     /**

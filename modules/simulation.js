@@ -530,6 +530,28 @@ class Simulation {
                 if (oldFoodRate !== this.foodRate) console.log('Taxa de comida atualizada:', this.foodRate);
                 if (oldFoodValue !== this.foodValue) console.log('Valor nutricional atualizado:', this.foodValue);
                 if (oldMaxObstacles !== this.maxObstacles) console.log('Número de obstáculos atualizado:', this.maxObstacles);
+            },
+            onSpeedChange: (value) => {
+                this.speed = value;
+            },
+            onLifespanChange: (value) => {
+                // Atualiza o tempo de vida base para novas bactérias
+                DNA.prototype.baseLifespan = value;
+            },
+            onHealthLossChange: (value) => {
+                // Atualiza a taxa de perda de saúde para todas as bactérias
+                for (let bacteria of this.bacteria) {
+                    bacteria.healthLossRate = value;
+                }
+            },
+            onFeedingIntervalChange: (value) => {
+                // Atualiza o intervalo de alimentação para todas as bactérias
+                for (let bacteria of this.bacteria) {
+                    bacteria.starvationTime = value;
+                }
+            },
+            onPause: () => {
+                // ... existing code ...
             }
         });
 

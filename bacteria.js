@@ -21,7 +21,8 @@ class Bacteria {
         this.age = 0;
         this.lifespan = this.dna.baseLifespan;
         this.lastMealTime = frameCount; // Começa com comida
-        this.starvationTime = this.lifespan * 0.2; // 20% do tempo de vida
+        this.healthLossRate = window.simulation ? window.simulation.controls.healthLossSlider.value() : 0.05;
+        this.starvationTime = window.simulation ? window.simulation.controls.feedingIntervalSlider.value() * 60 * 60 : 30 * 60 * 60; // 30 minutos em frames por padrão
         this.isFemale = random() > 0.5;
 
         // Inicializa outros sistemas
@@ -83,12 +84,18 @@ class Bacteria {
      * Atualiza a saúde da bactéria
      */
     updateHealth() {
-        // Perde saúde mais lentamente
-        this.health -= 0.05;
+        // Atualiza as taxas baseado nos controles
+        if (window.simulation) {
+            this.healthLossRate = window.simulation.controls.healthLossSlider.value();
+            this.starvationTime = window.simulation.controls.feedingIntervalSlider.value() * 60 * 60;
+        }
 
-        // Perde mais saúde se estiver com fome, mas não tão rápido
+        // Perde saúde normalmente
+        this.health -= this.healthLossRate;
+
+        // Perde mais saúde se estiver com fome
         if (frameCount - this.lastMealTime > this.starvationTime) {
-            this.health -= 0.2;
+            this.health -= this.healthLossRate * 4; // Perde saúde 4x mais rápido quando com fome
         }
 
         // Limita a saúde entre 0 e 100

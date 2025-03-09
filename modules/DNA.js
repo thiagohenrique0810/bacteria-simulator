@@ -8,7 +8,7 @@ class DNA {
      */
     constructor(parentDNA = null) {
         this.generation = parentDNA ? parentDNA.generation + 1 : 1;
-        this.baseLifespan = 1800; // 30 segundos * 60 frames
+        this.baseLifespan = window.simulation ? window.simulation.controls.lifespanSlider.value() * 3600 * 60 : 12 * 3600 * 60; // 12 horas em frames
         this.genes = this.initializeGenes(parentDNA);
     }
 

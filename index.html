@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulação de Bactérias</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 5px 10px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #e0e0e0;
+        }
+        select, input[type="range"] {
+            margin: 5px;
+            padding: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <!-- Classes Base -->
+    <script src="food.js"></script>
+    <script src="obstacle.js"></script>
+    <script src="bacteria.js"></script>
+    
+    <!-- Módulos do Sistema -->
+    <script src="modules/dna.js"></script>
+    <script src="modules/movement.js"></script>
+    <script src="modules/behavior.js"></script>
+    <script src="modules/reproduction.js"></script>
+    <script src="modules/saveSystem.js"></script>
+    <script src="modules/randomEvents.js"></script>
+    <script src="modules/controls.js"></script>
+    <script src="modules/visualization.js"></script>
+    <script src="modules/simulation.js"></script>
+    
+    <!-- Script Principal -->
+    <script src="sketch.js"></script>
+</body>
+</html> 

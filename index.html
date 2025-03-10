@@ -3,60 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulação de Bactérias</title>
+    <title>Simulador de Bactérias</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    
+    <!-- Carrega constantes e utilitários primeiro -->
+    <script src="modules/constants.js"></script>
+    <script src="modules/utils.js"></script>
+
+    <!-- Carrega sistemas base -->
+    <script src="modules/dna.js"></script>
+    <script src="modules/movement.js"></script>
+    <script src="modules/neural.js"></script>
+    <script src="modules/behavior.js"></script>
+    <script src="modules/reproduction.js"></script>
+    <script src="modules/visualization.js"></script>
+
+    <!-- Carrega entidades base -->
+    <script src="modules/food.js"></script>
+    <script src="modules/obstacle.js"></script>
+
+    <!-- Carrega classe base Bacteria antes do Predator -->
+    <script src="modules/bacteria.js"></script>
+    <script src="modules/predatorStates.js"></script>
+    <script src="modules/predator.js"></script>
+
+    <!-- Carrega sistemas de controle na ordem correta -->
+    <script src="modules/controls/ControlsBase.js"></script>
+    <script src="modules/controls/SimulationControls.js"></script>
+    <script src="modules/controls/EnvironmentControls.js"></script>
+    <script src="modules/controls/VisualizationControls.js"></script>
+    <script src="modules/controls/SaveControls.js"></script>
+    <script src="modules/controls/Controls.js"></script>
+    <script src="modules/controls.js"></script>
+    <script src="modules/events.js"></script>
+    <script src="modules/save.js"></script>
+
+    <!-- Carrega sistema principal -->
+    <script src="modules/simulation.js"></script>
+    <script src="sketch.js"></script>
+
     <style>
         body {
             margin: 0;
-            padding: 20px;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
         }
         canvas {
-            display: block;
-            margin: 0 auto;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        button {
-            padding: 5px 10px;
-            margin: 5px;
-            border: none;
-            border-radius: 5px;
-            background-color: #f0f0f0;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #e0e0e0;
-        }
-        select, input[type="range"] {
-            margin: 5px;
-            padding: 5px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
+            border: 1px solid #333;
         }
     </style>
 </head>
 <body>
-    <!-- Classes Base -->
-    <script src="food.js"></script>
-    <script src="bacteria.js"></script>
-    
-    <!-- Módulos do Sistema -->
-    <script src="modules/obstacle.js"></script>
-    <script src="modules/dna.js"></script>
-    <script src="modules/movement.js"></script>
-    <script src="modules/bacteriaStates.js"></script>
-    <script src="modules/behavior.js"></script>
-    <script src="modules/reproduction.js"></script>
-    <script src="modules/saveSystem.js"></script>
-    <script src="modules/randomEvents.js"></script>
-    <script src="modules/controls.js"></script>
-    <script src="modules/visualization.js"></script>
-    <script src="modules/simulation.js"></script>
-    
-    <!-- Script Principal -->
-    <script src="sketch.js"></script>
 </body>
 </html> 

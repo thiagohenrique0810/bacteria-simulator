@@ -133,6 +133,43 @@ bacterias/
   - Listagem de Diretórios: visível
   - AutoIndex: visível
 
+## Melhorias Implementadas
+
+### Sistema de Inteligência Artificial
+- **Máquina de Estados (FSM)**:
+  - Estados implementados: exploração, busca por comida, fuga, reprodução, descanso
+  - Transições dinâmicas baseadas em condições do ambiente
+  - Sistema modular através da classe `BacteriaStates`
+
+- **Aprendizado por Reforço (Q-Learning)**:
+  - Sistema de recompensas baseado em ações
+  - Memória de aprendizado através de Q-Table
+  - Taxa de aprendizado e fator de desconto configuráveis
+  - Ações disponíveis: explorar, buscar comida, buscar parceiro, descansar
+
+- **Sistema Neural**:
+  - Implementação de rede neural para tomada de decisões
+  - Inputs normalizados incluindo saúde, energia, proximidade de comida/parceiros/predadores
+  - Sistema híbrido permitindo alternar entre Q-Learning e Rede Neural
+  - Capacidade de evolução através de gerações
+
+### Melhorias no Sistema de DNA
+- Sistema genético aprimorado com múltiplos genes
+- Hereditariedade com mutações controladas
+- Genes afetando características físicas e comportamentais
+
+### Visualização e Interface
+- Sistema de visualização modular através da classe `BacteriaVisualization`
+- Indicadores visuais de estado e saúde
+- Interface de controle aprimorada com sliders e botões
+- Sistema de informações em tempo real
+
+### Otimizações
+- Sistema de movimento otimizado
+- Gerenciamento eficiente de recursos
+- Modularização do código para melhor manutenção
+- Sistema de estados para controle de comportamento
+
 ## Desenvolvimento
 
 Para adicionar novas funcionalidades:

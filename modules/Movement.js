@@ -39,20 +39,27 @@ class Movement {
      * @param {Array} obstacles - Lista de obstáculos
      * @param {number} size - Tamanho da bactéria
      * @param {boolean} isResting - Se está descansando
+     * @param {number} deltaTime - Tempo desde o último frame
      */
-    update(ageRatio, obstacles, size, isResting) {
+    update(ageRatio, obstacles, size, isResting, deltaTime = 1/60) {
         if (this.isStopped || isResting) {
-            this.velocity.mult(0.95); // Desacelera gradualmente
+            // Desacelera gradualmente com base no deltaTime
+            this.velocity.mult(Math.pow(0.95, deltaTime * 60));
             return;
         }
 
         // Reduz velocidade com a idade
         let currentMaxSpeed = this.maxSpeed * (1 - ageRatio * 0.5);
 
-        // Aplica aceleração
-        this.velocity.add(this.acceleration);
+        // Aplica aceleração ajustada pelo deltaTime
+        let scaledAcceleration = this.acceleration.copy().mult(deltaTime * 60);
+        this.velocity.add(scaledAcceleration);
         this.velocity.limit(currentMaxSpeed);
-        this.position.add(this.velocity);
+        
+        // Atualiza posição com base no deltaTime
+        let movement = this.velocity.copy().mult(deltaTime * 60);
+        this.position.add(movement);
+        
         this.acceleration.mult(0);
 
         // Evita obstáculos

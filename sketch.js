@@ -151,17 +151,29 @@ function mouseReleased() {
  * Eventos do teclado
  */
 function keyPressed() {
+    // Verifica se a simulação está pronta
+    if (!setupComplete || !simulation || !simulation.controls || !simulation.controls.initialized) {
+        console.log('Simulação não está pronta para processar eventos');
+        return false;
+    }
+
+    // Previne comportamento padrão para teclas específicas
+    if ([' ', 'r', 'R', 's', 'S', 'l', 'L', 'e', 'E'].includes(key)) {
+        event.preventDefault();
+    }
+
     if (keyCode === ESCAPE) {
         simulation.isDragging = false;
         simulation.selectedBacteria = null;
+        return false;
     }
-
-    if (!simulation || !simulation.controls) return;
 
     switch (key) {
         case ' ':  // Espaço - Pausa/Continua
             simulation.paused = !simulation.paused;
-            simulation.controls.pauseButton.html(simulation.paused ? 'Continuar' : 'Pausar');
+            if (simulation.controls.pauseButton) {
+                simulation.controls.pauseButton.html(simulation.paused ? 'Continuar' : 'Pausar');
+            }
             break;
         case 'r':  // R - Reinicia
         case 'R':
@@ -171,21 +183,22 @@ function keyPressed() {
             break;
         case 's':  // S - Salva
         case 'S':
-            if (simulation.controls.onSave) {
-                simulation.controls.onSave();
+            if (simulation.controls && simulation.controls.callbacks.onSave) {
+                simulation.controls.callbacks.onSave();
             }
             break;
         case 'l':  // L - Carrega
         case 'L':
-            if (simulation.controls.onLoad) {
-                simulation.controls.onLoad();
+            if (simulation.controls && simulation.controls.callbacks.onLoad) {
+                simulation.controls.callbacks.onLoad();
             }
             break;
         case 'e':  // E - Evento aleatório
         case 'E':
-            if (simulation.controls.onRandomEvent) {
-                simulation.controls.onRandomEvent();
+            if (simulation.controls && simulation.controls.callbacks.onRandomEvent) {
+                simulation.controls.callbacks.onRandomEvent();
             }
             break;
     }
+    return false;
 } 

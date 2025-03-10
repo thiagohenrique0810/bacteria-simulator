@@ -14,6 +14,23 @@ class Movement {
         this.maxSpeed = 4;
         this.maxForce = 0.2;
         this.size = size;
+        this.isStopped = false;
+    }
+
+    /**
+     * Para o movimento da bactéria
+     */
+    stop() {
+        this.isStopped = true;
+        this.velocity.mult(0);
+        this.acceleration.mult(0);
+    }
+
+    /**
+     * Retoma o movimento da bactéria
+     */
+    resume() {
+        this.isStopped = false;
     }
 
     /**
@@ -24,7 +41,7 @@ class Movement {
      * @param {boolean} isResting - Se está descansando
      */
     update(ageRatio, obstacles, size, isResting) {
-        if (isResting) {
+        if (this.isStopped || isResting) {
             this.velocity.mult(0.95); // Desacelera gradualmente
             return;
         }

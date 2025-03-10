@@ -248,69 +248,38 @@ class Controls {
         row.style('border', '1px solid #ddd');
         row.style('position', 'relative');
         row.style('z-index', '1001');
-        row.style('pointer-events', 'auto');
-        
-        const labelEl = createElement('span', label);
+
+        // Label
+        const labelEl = createDiv(label);
+        labelEl.style('width', '150px');
         labelEl.style('margin-right', '10px');
-        labelEl.style('min-width', '120px');
-        labelEl.style('font-weight', 'bold');
-        labelEl.style('color', '#333');
-        
-        if (control.elt.type === 'range') {
-            // Configura o slider
-            control.style('width', '200px');
-            control.style('margin', '0 10px');
-            control.style('cursor', 'pointer');
-            control.style('z-index', '1002');
-            control.style('pointer-events', 'auto');
-            
-            // Adiciona o display de valor
-            const valueDisplay = createElement('span', control.value());
-            valueDisplay.class('value-display');
-            valueDisplay.style('margin-left', '10px');
-            valueDisplay.style('min-width', '40px');
-            valueDisplay.style('font-weight', 'bold');
-            valueDisplay.style('color', '#4CAF50');
+        labelEl.style('font-size', '14px');
+        row.child(labelEl);
 
-            // Função para atualizar o valor e o estado
-            const updateValue = () => {
-                const value = control.value();
-                valueDisplay.html(value);
-                if (this.onChange) {
-                    this.onChange(this.getState());
-                }
-            };
+        // Control
+        const controlWrapper = createDiv();
+        controlWrapper.style('flex', '1');
+        controlWrapper.child(control);
+        row.child(controlWrapper);
 
-            // Atualiza o valor em tempo real
-            control.elt.addEventListener('input', updateValue);
-            control.elt.addEventListener('change', updateValue);
+        // Valor atual
+        const valueDisplay = createDiv('0');
+        valueDisplay.style('width', '50px');
+        valueDisplay.style('margin-left', '10px');
+        valueDisplay.style('text-align', 'right');
+        valueDisplay.style('font-family', 'monospace');
+        row.child(valueDisplay);
 
-            // Eventos de teclado
-            control.elt.addEventListener('keydown', (e) => {
-                const step = parseFloat(control.elt.step) || 1;
-                const value = parseFloat(control.value());
-                let newValue = value;
-                
-                if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-                    newValue = value + step;
-                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-                    newValue = value - step;
-                }
-                
-                if (newValue !== value) {
-                    control.value(newValue);
-                    updateValue();
-                }
-            });
+        // Atualiza o valor inicial
+        const updateValue = () => {
+            const value = control.value();
+            valueDisplay.html(typeof value === 'number' ? value.toFixed(2) : value);
+        };
 
-            row.child(labelEl);
-            row.child(control);
-            row.child(valueDisplay);
-        } else {
-            row.child(labelEl);
-            row.child(control);
-        }
-        
+        // Adiciona listener para atualização
+        control.input(updateValue);
+        updateValue(); // Atualiza valor inicial
+
         parent.child(row);
         return row;
     }

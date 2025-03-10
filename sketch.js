@@ -86,7 +86,7 @@ function mousePressed() {
                 simulation.selectedBacteria = b;
                 simulation.isDragging = true;
                 b.movement.velocity.set(0, 0);
-                b.behavior.currentBehavior = 'resting';
+                b.states.currentState = b.states.states.RESTING;
                 return false;
             }
         }
@@ -112,7 +112,7 @@ function mouseDragged() {
         simulation.selectedBacteria.pos.x = constrain(mouseX, 10, 780);
         simulation.selectedBacteria.pos.y = constrain(mouseY, 10, height - 10);
         simulation.selectedBacteria.movement.velocity.set(0, 0);
-        simulation.selectedBacteria.behavior.currentBehavior = 'resting';
+        simulation.selectedBacteria.states.currentState = simulation.selectedBacteria.states.states.RESTING;
     }
     return false;
 }

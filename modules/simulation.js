@@ -53,12 +53,18 @@ class Simulation {
             starvationDeaths: 0,
             highestGeneration: 1,
             births: 0,
+            naturalBirths: 0,     // Nascimentos por reprodução natural
+            matingAttempts: 0,    // Tentativas de acasalamento
+            successfulMatings: 0,  // Acasalamentos bem-sucedidos
             deaths: 0,
             foodConsumed: 0,
             mutations: 0,
             eventsTriggered: 0,
             averageHealth: 0,
-            totalChildren: 0
+            totalChildren: 0,
+            averageReward: 0,
+            explorationRate: 0,
+            learningProgress: 0
         };
     }
 
@@ -144,12 +150,15 @@ class Simulation {
     updateEntities() {
         // Atualiza bactérias
         for (let bacteria of this.bacteria) {
-            bacteria.update(this.food, this.obstacles, this.bacteria);
+            const child = bacteria.update(this.food, this.obstacles, this.bacteria);
+            if (child) {
+                this.bacteria.push(child);
+            }
         }
 
         // Remove bactérias mortas
         const initialCount = this.bacteria.length;
-        this.bacteria = this.bacteria.filter(bacteria => bacteria.health > 0);
+        this.bacteria = this.bacteria.filter(bacteria => !bacteria.isDead());
         this.stats.deaths += initialCount - this.bacteria.length;
 
         // Adiciona nova comida baseado na taxa
@@ -173,9 +182,11 @@ class Simulation {
                 const d = dist(bacteria.pos.x, bacteria.pos.y, food.position.x, food.position.y);
                 
                 if (d < bacteria.size/2 + 5) {
-                    bacteria.eat(food.nutrition);
-                    this.food.splice(i, 1);
-                    this.stats.foodConsumed++;
+                    // Só remove a comida se a bactéria realmente comeu
+                    if (bacteria.eat(food)) {
+                        this.food.splice(i, 1);
+                        this.stats.foodConsumed++;
+                    }
                 }
             }
         }
@@ -191,13 +202,12 @@ class Simulation {
                     b1.health >= 70 && b2.health >= 70 &&
                     b1.reproduction.canMateNow() && b2.reproduction.canMateNow()) {
                     
-                    // Tenta acasalar
+                    // Contabiliza tentativa de acasalamento
+                    this.stats.matingAttempts++;
+                    
+                    // Tenta acasalar - o nascimento acontecerá depois do período de gravidez
                     if (b1.mate(b2)) {
-                        const child = this.createChild(b1, b2);
-                        if (child) {
-                            this.bacteria.push(child);
-                            this.stats.births++;
-                        }
+                        this.stats.successfulMatings++;
                     }
                 }
             }
@@ -247,50 +257,72 @@ class Simulation {
         this.stats.pregnantBacterias = 0;
         this.stats.restingBacterias = 0;
         this.stats.hungryBacterias = 0;
-        
-        // Saúde média
-        let totalHealth = 0;
 
-        // Atualiza contadores
+        // Variáveis para médias
+        let totalHealth = 0;
+        let totalReward = 0;
+        let totalExplorationActions = 0;
+        let totalQValues = 0;
+        let totalQEntries = 0;
+
+        // Calcula médias e contadores
         for (let bacteria of this.bacteria) {
-            // Gênero
+            // Contagem por gênero
             if (bacteria.isFemale) {
                 this.stats.femaleBacterias++;
             } else {
                 this.stats.maleBacterias++;
             }
 
-            // Estado reprodutivo
+            // Contagem por estado
             if (bacteria.reproduction.isPregnant) {
                 this.stats.pregnantBacterias++;
             }
-
-            // Estado comportamental
-            if (bacteria.behavior.isRestingState()) {
+            if (bacteria.states.getCurrentState() === 'resting') {
                 this.stats.restingBacterias++;
             }
-
-            // Estado de fome
-            if (frameCount - bacteria.lastMealTime > bacteria.starvationTime * 0.7) {
+            if (bacteria.states.getEnergy() < 30) {
                 this.stats.hungryBacterias++;
             }
 
-            // Soma saúde
+            // Soma saúde para média
             totalHealth += bacteria.health;
+
+            // Estatísticas do Q-Learning
+            const reward = bacteria.calculateReward();
+            totalReward += reward;
+
+            // Conta ações de exploração (quando random < 0.1)
+            if (random() < 0.1) {
+                totalExplorationActions++;
+            }
+
+            // Calcula média dos Q-values
+            for (let stateKey in bacteria.qLearning.qTable) {
+                const qValues = Object.values(bacteria.qLearning.qTable[stateKey]);
+                totalQValues += qValues.reduce((a, b) => a + b, 0);
+                totalQEntries += qValues.length;
+            }
         }
 
-        // Calcula saúde média
+        // Calcula média de saúde
         this.stats.averageHealth = this.bacteria.length > 0 ? 
             totalHealth / this.bacteria.length : 0;
-        
+
         // Atualiza geração mais alta
-        const maxGen = this.bacteria.reduce((max, b) => 
-            Math.max(max, b.dna.generation), 0
-        );
-        if (maxGen > this.stats.highestGeneration) {
-            this.stats.highestGeneration = maxGen;
-            this.stats.generation = maxGen;
+        for (let bacteria of this.bacteria) {
+            if (bacteria.dna.generation > this.stats.highestGeneration) {
+                this.stats.highestGeneration = bacteria.dna.generation;
+            }
         }
+
+        // Atualiza estatísticas do Q-Learning
+        this.stats.averageReward = this.bacteria.length > 0 ? 
+            totalReward / this.bacteria.length : 0;
+        this.stats.explorationRate = this.bacteria.length > 0 ? 
+            totalExplorationActions / this.bacteria.length : 0;
+        this.stats.learningProgress = totalQEntries > 0 ? 
+            totalQValues / totalQEntries : 0;
     }
 
     /**
@@ -334,11 +366,13 @@ class Simulation {
         let y = 20;
         text(`Geração: ${this.stats.generation}`, 10, y); y += 20;
         text(`Bactérias: ${this.stats.totalBacteria}`, 10, y); y += 20;
-        text(`Nascimentos: ${this.stats.births}`, 10, y); y += 20;
+        text(`Fêmeas: ${this.stats.femaleBacterias}`, 10, y); y += 20;
+        text(`Machos: ${this.stats.maleBacterias}`, 10, y); y += 20;
+        text(`Grávidas: ${this.stats.pregnantBacterias}`, 10, y); y += 20;
+        text(`Acasalamentos: ${this.stats.successfulMatings}`, 10, y); y += 20;
+        text(`Nascimentos: ${this.stats.naturalBirths}`, 10, y); y += 20;
         text(`Mortes: ${this.stats.deaths}`, 10, y); y += 20;
-        text(`Comida Consumida: ${this.stats.foodConsumed}`, 10, y); y += 20;
-        text(`Mutações: ${this.stats.mutations}`, 10, y); y += 20;
-        text(`Eventos: ${this.stats.eventsTriggered}`, 10, y);
+        text(`Comida: ${this.stats.foodConsumed}`, 10, y);
     }
 
     /**
@@ -411,12 +445,18 @@ class Simulation {
             starvationDeaths: 0,
             highestGeneration: 1,
             births: 0,
+            naturalBirths: 0,     // Nascimentos por reprodução natural
+            matingAttempts: 0,    // Tentativas de acasalamento
+            successfulMatings: 0,  // Acasalamentos bem-sucedidos
             deaths: 0,
             foodConsumed: 0,
             mutations: 0,
             eventsTriggered: 0,
             averageHealth: 0,
-            totalChildren: 0
+            totalChildren: 0,
+            averageReward: 0,
+            explorationRate: 0,
+            learningProgress: 0
         };
         this.setup();
     }

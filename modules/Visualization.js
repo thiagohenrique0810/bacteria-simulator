@@ -320,6 +320,56 @@ class SimulationVisualization {
         text(`Comida Disponível: ${this.simulation.food?.length || 0}`, x, y); y += lineHeight;
         text(`Obstáculos: ${this.simulation.obstacles?.length || 0}`, x, y);
     }
+
+    /**
+     * Desenha as estatísticas
+     */
+    drawStats() {
+        push();
+        fill(255);
+        noStroke();
+        textAlign(LEFT);
+        textSize(14);
+
+        let y = 30;
+        const lineHeight = 20;
+
+        // População
+        text(`População Total: ${this.simulation.stats.totalBacteria}`, 10, y);
+        y += lineHeight;
+        text(`Fêmeas: ${this.simulation.stats.femaleBacterias}`, 10, y);
+        y += lineHeight;
+        text(`Machos: ${this.simulation.stats.maleBacterias}`, 10, y);
+        y += lineHeight;
+
+        // Saúde e Energia
+        text(`Saúde Média: ${this.simulation.stats.averageHealth.toFixed(1)}`, 10, y);
+        y += lineHeight;
+        text(`Famintos: ${this.simulation.stats.hungryBacterias}`, 10, y);
+        y += lineHeight;
+        text(`Descansando: ${this.simulation.stats.restingBacterias}`, 10, y);
+        y += lineHeight;
+
+        // Reprodução
+        text(`Grávidas: ${this.simulation.stats.pregnantBacterias}`, 10, y);
+        y += lineHeight;
+        text(`Geração: ${this.simulation.stats.highestGeneration}`, 10, y);
+        y += lineHeight;
+        text(`Nascimentos: ${this.simulation.stats.naturalBirths}`, 10, y);
+        y += lineHeight;
+
+        // Estatísticas do Q-Learning
+        y += lineHeight; // Espaço extra
+        text("Aprendizado por Reforço:", 10, y);
+        y += lineHeight;
+        text(`Recompensa Média: ${this.simulation.stats.averageReward.toFixed(2)}`, 10, y);
+        y += lineHeight;
+        text(`Taxa de Exploração: ${(this.simulation.stats.explorationRate * 100).toFixed(1)}%`, 10, y);
+        y += lineHeight;
+        text(`Progresso: ${this.simulation.stats.learningProgress.toFixed(2)}`, 10, y);
+
+        pop();
+    }
 }
 
 // Tornando as classes globais

@@ -37,13 +37,15 @@ class Simulation {
         // Estatísticas
         this.initStats();
 
-        // Configuração dos controles
-        this.setupControls();
-
-        this.predatorControls = new PredatorControls(this.controlsContainer);
-        this.predatorControls.setupEventListeners({
-            onChange: (state) => this.updateFromControls()
-        });
+        // Configuração dos controles - Movido para depois da inicialização do p5.js
+        if (typeof createDiv === 'function') {
+            this.setupControls();
+        } else {
+            console.warn('p5.js não está pronto ainda. Os controles serão inicializados posteriormente.');
+            window.addEventListener('load', () => {
+                this.setupControls();
+            });
+        }
     }
 
     /**
@@ -88,6 +90,34 @@ class Simulation {
      */
     setupControls() {
         if (!this.controls) return;
+
+        // Cria o container de controles se ainda não existir
+        if (!this.controlsContainer) {
+            this.controlsContainer = createDiv();
+            this.controlsContainer.id('predator-controls-container');
+            this.controlsContainer.style('position', 'fixed');
+            this.controlsContainer.style('bottom', '0');
+            this.controlsContainer.style('left', '0');
+            this.controlsContainer.style('width', '50%');
+            this.controlsContainer.style('background-color', 'rgba(248, 249, 250, 0.95)');
+            this.controlsContainer.style('padding', '15px');
+            this.controlsContainer.style('border-top', '1px solid rgba(0,0,0,0.1)');
+            this.controlsContainer.style('box-shadow', '0 -2px 10px rgba(0,0,0,0.1)');
+            this.controlsContainer.style('max-height', '200px');
+            this.controlsContainer.style('overflow-y', 'auto');
+            this.controlsContainer.style('z-index', '1000');
+            this.controlsContainer.style('display', 'flex');
+            this.controlsContainer.style('flex-direction', 'column');
+            document.body.appendChild(this.controlsContainer.elt);
+        }
+
+        // Inicializa os controles dos predadores
+        if (!this.predatorControls) {
+            this.predatorControls = new window.PredatorControls(this.controlsContainer);
+            this.predatorControls.setupEventListeners({
+                onChange: (state) => this.updateFromControls()
+            });
+        }
 
         this.controls.setCallbacks({
             onPauseToggle: (isPaused) => {

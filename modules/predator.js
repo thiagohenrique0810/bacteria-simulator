@@ -21,6 +21,11 @@ class Predator extends Bacteria {
         this.size = 25;
         this.color = color(255, 0, 0); // Vermelho sólido
         
+        // Inicialização do movimento
+        this.maxSpeed = 3;
+        this.velocity = createVector(random(-1, 1), random(-1, 1));
+        this.velocity.setMag(this.maxSpeed);
+        
         // Configurações de reprodução
         this.canReproduce = true;
         this.reproductionEnergyCost = 40;
@@ -127,14 +132,17 @@ class Predator extends Bacteria {
         const childX = (this.pos.x + partner.pos.x) / 2;
         const childY = (this.pos.y + partner.pos.y) / 2;
         
+        // Cria o filho
+        const child = new Predator(childX, childY);
+        
         // Herança de características com possibilidade de mutação
         if (random() < this.mutationRate) {
-            const child = new Predator(childX, childY);
+            // Mutação aleatória
             child.attackDamage = constrain(this.attackDamage + random(-5, 5), 10, 25);
             child.huntingRange = constrain(this.huntingRange + random(-20, 20), 100, 250);
             child.size = constrain(this.size + random(-2, 2), 20, 30);
         } else {
-            const child = new Predator(childX, childY);
+            // Herança média dos pais
             child.attackDamage = constrain((this.attackDamage + partner.attackDamage) / 2, 10, 25);
             child.huntingRange = constrain((this.huntingRange + partner.huntingRange) / 2, 100, 250);
             child.size = constrain((this.size + partner.size) / 2, 20, 30);

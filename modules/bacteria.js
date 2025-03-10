@@ -547,7 +547,91 @@ class Bacteria {
      * Desenha a bactéria
      */
     draw() {
-        this.visualization.draw(this.pos.x, this.pos.y);
+        push();
+        translate(this.pos.x, this.pos.y);
+        rotate(this.movement.velocity.heading());
+
+        // Desenha o corpo principal (forma de bastonete)
+        const bodyLength = this.size * 1.5;
+        const bodyWidth = this.size * 0.6;
+        
+        // Cor base da bactéria com transparência
+        const baseColor = this.isFemale ? color(255, 182, 193) : color(173, 216, 230);
+        
+        // Desenha sombra
+        noStroke();
+        fill(0, 30);
+        ellipse(2, 2, bodyLength, bodyWidth);
+
+        // Desenha o corpo principal
+        stroke(0, 50);
+        strokeWeight(0.5);
+        fill(baseColor);
+        ellipse(0, 0, bodyLength, bodyWidth);
+
+        // Adiciona textura interna (citoplasma)
+        noStroke();
+        for (let i = 0; i < 8; i++) {
+            const x = random(-bodyLength/4, bodyLength/4);
+            const y = random(-bodyWidth/4, bodyWidth/4);
+            const size = random(2, 4);
+            fill(red(baseColor) - 20, green(baseColor) - 20, blue(baseColor) - 20, 150);
+            ellipse(x, y, size, size);
+        }
+
+        // Desenha membrana celular
+        noFill();
+        stroke(0, 100);
+        strokeWeight(0.8);
+        ellipse(0, 0, bodyLength, bodyWidth);
+
+        // Desenha flagelos (cílios)
+        stroke(0, 150);
+        strokeWeight(0.5);
+        const numFlagella = 6;
+        const flagellaLength = this.size * 0.8;
+        for (let i = 0; i < numFlagella; i++) {
+            const angle = (i / numFlagella) * TWO_PI;
+            const x1 = (bodyLength/2) * cos(angle);
+            const y1 = (bodyWidth/2) * sin(angle);
+            const x2 = x1 + flagellaLength * cos(angle + sin(frameCount * 0.1 + i) * 0.5);
+            const y2 = y1 + flagellaLength * sin(angle + sin(frameCount * 0.1 + i) * 0.5);
+            
+            beginShape();
+            for (let t = 0; t <= 1; t += 0.1) {
+                const x = bezierPoint(x1, x1 + random(-2, 2), x2 + random(-2, 2), x2, t);
+                const y = bezierPoint(y1, y1 + random(-2, 2), y2 + random(-2, 2), y2, t);
+                curveVertex(x, y);
+            }
+            endShape();
+        }
+
+        // Indicador de energia
+        if (window.simulation?.showEnergy) {
+            const energyPercentage = this.states.getEnergy() / 100;
+            const energyBarWidth = this.size * 1.2;
+            const energyBarHeight = 3;
+            
+            // Barra de fundo
+            fill(0, 100);
+            noStroke();
+            rect(-energyBarWidth/2, -this.size/1.5, energyBarWidth, energyBarHeight);
+            
+            // Barra de energia
+            fill(lerpColor(color(255, 0, 0), color(0, 255, 0), energyPercentage));
+            rect(-energyBarWidth/2, -this.size/1.5, energyBarWidth * energyPercentage, energyBarHeight);
+        }
+
+        // Efeito de brilho quando saudável
+        if (this.health > 80) {
+            const glowSize = this.size * 1.2;
+            const glowColor = color(255, 255, 255, 30);
+            noStroke();
+            fill(glowColor);
+            ellipse(0, 0, glowSize, glowSize * 0.7);
+        }
+
+        pop();
     }
 
     /**

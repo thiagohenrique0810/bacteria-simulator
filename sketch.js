@@ -112,7 +112,11 @@ function mouseDragged() {
         simulation.selectedBacteria.pos.x = constrain(mouseX, 10, 780);
         simulation.selectedBacteria.pos.y = constrain(mouseY, 10, height - 10);
         simulation.selectedBacteria.movement.velocity.set(0, 0);
-        simulation.selectedBacteria.states.currentState = simulation.selectedBacteria.states.states.RESTING;
+        
+        // Corrige o acesso ao estado
+        if (simulation.selectedBacteria.states) {
+            simulation.selectedBacteria.states.setCurrentState(window.BacteriaStates.RESTING);
+        }
     }
     return false;
 }

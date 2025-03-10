@@ -21,18 +21,20 @@ window.ControlsImpl = class extends ControlsBase {
         this.container = createDiv();
         this.container.id('controls-container');
         this.container.style('position', 'fixed');
-        this.container.style('top', '20px');
-        this.container.style('right', '20px');
-        this.container.style('width', '300px');
-        this.container.style('background', '#f8f9fa');
-        this.container.style('padding', '20px');
-        this.container.style('border-radius', '8px');
-        this.container.style('box-shadow', '0 2px 10px rgba(0,0,0,0.1)');
+        this.container.style('bottom', '0');
+        this.container.style('right', '0');
+        this.container.style('width', '50%');
+        this.container.style('background', 'rgba(248, 249, 250, 0.95)');
+        this.container.style('padding', '15px');
+        this.container.style('border-top', '1px solid rgba(0,0,0,0.1)');
+        this.container.style('box-shadow', '0 -2px 10px rgba(0,0,0,0.1)');
         this.container.style('z-index', '1000');
-        this.container.style('max-height', 'calc(100vh - 40px)');
+        this.container.style('max-height', '200px');
         this.container.style('overflow-y', 'auto');
         this.container.style('scrollbar-width', 'thin');
         this.container.style('scrollbar-color', '#4CAF50 #f8f9fa');
+        this.container.style('display', 'flex');
+        this.container.style('flex-direction', 'column');
 
         // Previne que eventos do mouse se propaguem para o canvas
         this.container.elt.addEventListener('mousedown', e => e.stopPropagation());

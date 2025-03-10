@@ -115,8 +115,17 @@ class PredatorStates {
     handlePatrollingState() {
         // Movimento aleatório
         if (random() < 0.05) {
+            // Cria um vetor de direção aleatória
             const angle = random(TWO_PI);
-            this.predator.velocity.rotate(angle);
+            const direction = p5.Vector.fromAngle(angle);
+            direction.mult(this.predator.maxSpeed);
+            
+            // Aplica a direção suavemente
+            if (this.predator.velocity) {
+                this.predator.velocity.lerp(direction, 0.1);
+            } else {
+                this.predator.velocity = direction;
+            }
         }
     }
 }

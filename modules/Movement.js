@@ -185,6 +185,27 @@ class Movement {
             this.applyForce(escape);
         }
     }
+
+    /**
+     * Define a direção do movimento
+     * @param {p5.Vector} direction - Vetor de direção normalizado
+     */
+    setDirection(direction) {
+        if (!direction) return;
+        
+        // Aplica a direção como força de aceleração
+        const force = direction.copy();
+        force.limit(this.maxForce);
+        this.applyForce(force);
+    }
+
+    /**
+     * Obtém a posição atual
+     * @returns {p5.Vector} - A posição atual
+     */
+    getPosition() {
+        return this.position.copy();
+    }
 }
 
 // Tornando a classe global

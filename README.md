@@ -1,14 +1,15 @@
-# Simulação de Bactérias
+# Simulador de Bactérias
 
-Uma simulação interativa de um ecossistema artificial onde bactérias evoluem e interagem entre si.
+Uma simulação interativa de um ecossistema artificial onde bactérias virtuais evoluem, interagem e se adaptam ao ambiente através de sistemas avançados de inteligência artificial.
 
 ## Descrição
 
-Este projeto simula um ambiente onde bactérias virtuais podem se mover, se alimentar, se reproduzir e evoluir ao longo do tempo. As bactérias possuem DNA que define suas características e comportamentos, que são passados para seus descendentes com possíveis mutações.
+Este projeto simula um ecossistema complexo onde bactérias virtuais podem se mover, se alimentar, se reproduzir e evoluir ao longo do tempo. As bactérias possuem DNA que define suas características e comportamentos, que são passados para seus descendentes com possíveis mutações, permitindo a simulação de processos evolutivos. O simulador inclui sistemas avançados de IA, interações sociais entre bactérias, ciclo dia/noite, predadores, doenças e diversos eventos ambientais.
 
-## Funcionalidades
+## Principais Recursos
 
-- **Sistema de DNA**: Cada bactéria possui genes que controlam:
+### Sistema de DNA e Evolução
+- **Mecanismo Genético Complexo**: Cada bactéria possui genes que controlam:
   - Metabolismo
   - Imunidade
   - Regeneração
@@ -22,13 +23,46 @@ Este projeto simula um ambiente onde bactérias virtuais podem se mover, se alim
   - Taxa de mutação
   - Adaptabilidade
   - Aparência (tamanho e cor)
+- **Hereditariedade**: Genes são transmitidos às novas gerações com possibilidade de mutações
+- **Seleção Natural**: Bactérias mais adaptadas têm maior chance de sobrevivência e reprodução
 
-- **Comportamentos**:
-  - Busca por comida
-  - Reprodução
-  - Descanso
-  - Exploração
-  - Fuga de predadores
+### Comportamentos Inteligentes
+- **Máquina de Estados (FSM)**:
+  - Estados implementados: exploração, busca por comida, fuga, reprodução, descanso
+  - Transições dinâmicas baseadas em condições do ambiente
+  - Sistema modular através da classe `BacteriaStates`
+
+- **Aprendizado por Reforço (Q-Learning)**:
+  - Sistema de recompensas baseado em ações
+  - Memória de aprendizado através de Q-Table
+  - Taxa de aprendizado e fator de desconto configuráveis
+  - Ações disponíveis: explorar, buscar comida, buscar parceiro, descansar
+
+- **Sistema Neural**:
+  - Implementação de rede neural para tomada de decisões
+  - Inputs normalizados incluindo saúde, energia, proximidade de comida/parceiros/predadores
+  - Sistema híbrido permitindo alternar entre Q-Learning e Rede Neural
+  - Capacidade de evolução através de gerações
+
+### Interações Sociais
+- **Sistema Social Avançado**:
+  - Formação de amizades e inimizades entre bactérias
+  - Papéis na comunidade baseados em genes (explorador, protetor, comunicador, etc.)
+  - Comunicação entre bactérias próximas
+  - Memória de relacionamentos anteriores
+
+### Ecossistema Complexo
+- **Dinâmica Ambiental**:
+  - Ciclo dia/noite afetando comportamentos
+  - Geração de alimentos com taxas configuráveis
+  - Obstáculos e barreiras no ambiente
+  - Predadores que caçam as bactérias
+
+- **Sistema de Doenças**:
+  - Doenças com diferentes sintomas e taxas de contágio
+  - Transmissão por contato entre bactérias
+  - Imunidade adquirida após recuperação
+  - Efeitos visuais para bactérias infectadas
 
 - **Eventos Aleatórios**:
   - Tempestades
@@ -39,15 +73,24 @@ Este projeto simula um ambiente onde bactérias virtuais podem se mover, se alim
   - Migrações
   - Terremotos
 
-- **Sistema de Salvamento**:
-  - Salvar estados da simulação
-  - Carregar estados salvos
-  - Exportar/Importar saves
+### Interface e Visualização
+- **Controles Avançados**:
+  - Painéis modulares para cada sistema (simulação, predadores, doenças, etc.)
+  - Ajustes em tempo real de todos os parâmetros
+  - Estatísticas detalhadas da evolução do ecossistema
+  - Sistema de salvamento e carregamento de estados
+
+- **Visualização Detalhada**:
+  - Indicadores visuais de estado, saúde e energia
+  - Visualização de relações sociais
+  - Efeitos visuais para eventos e interações
+  - Modo debug com informações detalhadas
 
 ## Controles
 
 - **Mouse**:
   - Clique em uma bactéria para ver suas informações
+  - Arraste para movimentar a visualização
 
 - **Teclado**:
   - `Espaço`: Pausar/Continuar simulação
@@ -56,42 +99,57 @@ Este projeto simula um ambiente onde bactérias virtuais podem se mover, se alim
   - `L`: Carregar último estado salvo
   - `E`: Gerar evento aleatório
 
-## Interface
+## Arquitetura do Projeto
 
-- **Controles de Simulação**:
-  - Ajuste de velocidade
-  - Botões de pausa e reinício
-  - Visualização de estatísticas
-
-- **Controles de Ambiente**:
-  - Taxa de geração de comida
-  - Número de obstáculos
-  - Geração de eventos
-
-- **Visualização**:
-  - Estatísticas em tempo real
-  - Indicadores de estado das bactérias
-  - Modo debug opcional
-
-## Estrutura do Projeto
+O projeto segue uma arquitetura modular orientada a objetos, dividida em sistemas especializados:
 
 ```
 bacterias/
-├── index.html           # Página principal
-├── sketch.js           # Script principal
+├── index.html               # Página principal
+├── sketch.js                # Script principal P5.js
 ├── modules/
-│   ├── behavior.js     # Sistema de comportamento
-│   ├── controls.js     # Interface de controle
-│   ├── dna.js         # Sistema genético
-│   ├── movement.js    # Sistema de movimento
-│   ├── randomEvents.js # Sistema de eventos
-│   ├── reproduction.js # Sistema reprodutivo
-│   ├── saveSystem.js  # Sistema de salvamento
-│   ├── simulation.js  # Núcleo da simulação
-│   └── visualization.js # Sistema visual
-├── bacteria.js        # Classe Bacteria
-├── food.js           # Classe Food
-└── obstacle.js       # Classe Obstacle
+│   ├── bacteria/            # Módulos específicos de bactérias
+│   │   ├── BacteriaBase.js  # Classe base de bactérias
+│   │   ├── Environment.js   # Interação com ambiente
+│   │   ├── Learning.js      # Sistema de aprendizado
+│   │   ├── Movement.js      # Sistema de movimento
+│   │   ├── Social.js        # Interações sociais
+│   │   └── Visualization.js # Representação visual
+│   ├── controls/            # Módulos de interface
+│   │   ├── Controls.js      # Controles básicos
+│   │   ├── ControlsBase.js  # Classe base de controles
+│   │   ├── DiseaseControls.js # Controles de doenças
+│   │   ├── EnvironmentControls.js # Controles de ambiente
+│   │   ├── PredatorControls.js # Controles de predadores
+│   │   ├── SaveControls.js  # Controles de salvamento
+│   │   ├── SimulationControls.js # Controles de simulação
+│   │   └── VisualizationControls.js # Controles visuais
+│   ├── attackEffect.js      # Sistema de efeitos de ataque
+│   ├── bacteria.js          # Integração de bactérias
+│   ├── bacteriaStates.js    # Máquina de estados
+│   ├── behavior.js          # Sistema de comportamento
+│   ├── communication.js     # Sistema de comunicação
+│   ├── constants.js         # Constantes globais
+│   ├── controls.js          # Interface de controle
+│   ├── disease.js           # Sistema de doenças
+│   ├── dna.js               # Sistema genético
+│   ├── events.js            # Sistema de eventos
+│   ├── fix.js               # Correções e ajustes
+│   ├── food.js              # Sistema de alimentação
+│   ├── movement.js          # Sistema de movimento
+│   ├── neural.js            # Rede neural
+│   ├── obstacle.js          # Sistema de obstáculos
+│   ├── predator.js          # Sistema de predadores
+│   ├── predatorStates.js    # Estados dos predadores
+│   ├── randomEvents.js      # Sistema de eventos aleatórios
+│   ├── reproduction.js      # Sistema reprodutivo
+│   ├── save.js              # Sistema de salvamento
+│   ├── saveSystem.js        # Gerenciamento de salvamentos
+│   ├── simulation.js        # Núcleo da simulação
+│   ├── utils.js             # Funções utilitárias
+│   └── visualization.js     # Sistema visual
+├── food.js                  # Classe Food
+└── favicon.ico              # Ícone do site
 ```
 
 ## Dependências
@@ -126,58 +184,24 @@ bacterias/
 ### Notas sobre o Servidor
 - Para parar o servidor, pressione `Ctrl+C` no terminal
 - Certifique-se de que as portas escolhidas (8000 ou 8080) não estejam em uso
-- O servidor Node.js oferece recursos adicionais como:
-  - CORS: desabilitado por padrão
-  - Cache: 3600 segundos
-  - Timeout de Conexão: 120 segundos
-  - Listagem de Diretórios: visível
-  - AutoIndex: visível
+- O servidor Node.js oferece recursos adicionais como CORS, Cache e Listagem de Diretórios
 
-## Melhorias Implementadas
-
-### Sistema de Inteligência Artificial
-- **Máquina de Estados (FSM)**:
-  - Estados implementados: exploração, busca por comida, fuga, reprodução, descanso
-  - Transições dinâmicas baseadas em condições do ambiente
-  - Sistema modular através da classe `BacteriaStates`
-
-- **Aprendizado por Reforço (Q-Learning)**:
-  - Sistema de recompensas baseado em ações
-  - Memória de aprendizado através de Q-Table
-  - Taxa de aprendizado e fator de desconto configuráveis
-  - Ações disponíveis: explorar, buscar comida, buscar parceiro, descansar
-
-- **Sistema Neural**:
-  - Implementação de rede neural para tomada de decisões
-  - Inputs normalizados incluindo saúde, energia, proximidade de comida/parceiros/predadores
-  - Sistema híbrido permitindo alternar entre Q-Learning e Rede Neural
-  - Capacidade de evolução através de gerações
-
-### Melhorias no Sistema de DNA
-- Sistema genético aprimorado com múltiplos genes
-- Hereditariedade com mutações controladas
-- Genes afetando características físicas e comportamentais
-
-### Visualização e Interface
-- Sistema de visualização modular através da classe `BacteriaVisualization`
-- Indicadores visuais de estado e saúde
-- Interface de controle aprimorada com sliders e botões
-- Sistema de informações em tempo real
+## Recursos Técnicos
 
 ### Otimizações
-- Sistema de movimento otimizado
-- Gerenciamento eficiente de recursos
-- Modularização do código para melhor manutenção
-- Sistema de estados para controle de comportamento
+- **Particionamento Espacial**: Sistema de grade para otimizar detecção de colisões
+- **Gerenciamento de Memória**: Remoção de entidades quando fora do campo de visão
+- **Renderização Eficiente**: Técnicas de otimização para manter FPS estável com centenas de entidades
 
-## Desenvolvimento
+### Lógica Avançada
+- **Máquina de Estados Finitos**: Gerenciamento de comportamentos através de estados e transições
+- **Sistema de Eventos**: Arquitetura baseada em eventos para comunicação entre sistemas
+- **Modularização**: Código altamente modularizado para facilitar manutenção e expansão
 
-Para adicionar novas funcionalidades:
-
-1. Cada sistema está modularizado em arquivos separados
-2. Use as classes existentes como base para novas implementações
-3. Mantenha a consistência com o sistema de documentação
-4. Teste as interações com outros sistemas antes de integrar
+## Funcionalidades em Desenvolvimento
+- **Evolução de Espécies**: Surgimento de novas espécies de bactérias por deriva genética
+- **Ecossistema Expandido**: Novos tipos de entidades e interações ambientais
+- **Interface Web Avançada**: Dashboard com gráficos e análises estatísticas
 
 ## Contribuindo
 

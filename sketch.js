@@ -113,10 +113,24 @@ function setup() {
                                 baseMaxSpeed: 2 * simpleDNA.genes.speed,
                                 maxForce: 0.1,
                                 avoidRadius: 25,
-                                update: function() {
-                                    this.velocity.add(this.acceleration);
-                                    this.velocity.limit(this.maxSpeed);
-                                    this.pos.add(this.velocity);
+                                update: function(ageRatio, obstacles, size, isResting, deltaTime) {
+                                    // Verifique se o agente não está em repouso
+                                    if (!isResting) {
+                                        // Aplica a aceleração à velocidade
+                                        this.velocity.add(this.acceleration);
+                                        
+                                        // Limita a velocidade máxima
+                                        this.velocity.limit(this.maxSpeed);
+                                        
+                                        // Atualiza a posição
+                                        this.pos.add(this.velocity);
+                                        
+                                        // Mantém dentro da tela
+                                        this.pos.x = constrain(this.pos.x, size/2, simulation.width - size/2);
+                                        this.pos.y = constrain(this.pos.y, size/2, simulation.height - size/2);
+                                    }
+                                    
+                                    // Reseta a aceleração para o próximo ciclo
                                     this.acceleration.mult(0);
                                 }
                             },
@@ -130,7 +144,26 @@ function setup() {
                             },
                             update: function() {
                                 this.age++;
-                                this.movement.update();
+                                
+                                // Calcula a proporção de idade em relação ao tempo de vida (0-1)
+                                const ageRatio = constrain(this.age / this.lifespan, 0, 1);
+                                
+                                // Determina se a bactéria está descansando
+                                const isResting = this.state === window.BacteriaStates.RESTING;
+                                
+                                // Chama o método update do movimento com os parâmetros corretos
+                                this.movement.update(
+                                    ageRatio,
+                                    simulation.obstacles, 
+                                    this.size,
+                                    isResting,
+                                    1
+                                );
+                                
+                                // Sincroniza as posições
+                                this.pos.x = this.movement.pos.x;
+                                this.pos.y = this.movement.pos.y;
+                                
                                 // Manter dentro dos limites da tela
                                 this.pos.x = constrain(this.pos.x, 0, width);
                                 this.pos.y = constrain(this.pos.y, 0, height);
@@ -249,7 +282,7 @@ function mousePressed() {
                 simulation.selectedBacteria = b;
                 simulation.isDragging = true;
                 b.movement.velocity.set(0, 0);
-                b.states.currentState = b.states.states.RESTING;
+                b.states.currentState = window.BacteriaStates.RESTING;
                 return false;
             }
         }
@@ -301,8 +334,11 @@ function mouseDragged() {
         simulation.selectedBacteria.movement.velocity.set(0, 0);
         
         // Corrige o acesso ao estado
-        if (simulation.selectedBacteria.states) {
+        if (simulation.selectedBacteria.states && typeof simulation.selectedBacteria.states.setCurrentState === 'function') {
             simulation.selectedBacteria.states.setCurrentState(window.BacteriaStates.RESTING);
+        } else if (simulation.selectedBacteria.state) {
+            // Fallback para o método antigo
+            simulation.selectedBacteria.state = window.BacteriaStates.RESTING;
         }
     }
     return false;

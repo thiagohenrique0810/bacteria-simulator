@@ -2,7 +2,7 @@
  * Rede Neural avançada para tomada de decisões
  */
 class NeuralNetwork {
-    constructor(inputSize = 6, hiddenSize = 8, outputSize = 4) {
+    constructor(inputSize = 10, hiddenSize = 8, outputSize = 4) {
         this.inputSize = inputSize;
         this.hiddenSize = hiddenSize;
         this.outputSize = outputSize;

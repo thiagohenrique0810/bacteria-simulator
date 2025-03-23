@@ -500,7 +500,8 @@ class Simulation {
             
             // Atualiza a bactéria baseado na velocidade da simulação
             for (let s = 0; s < this.speed; s++) {
-                this.bacteria[i].update();
+                // Passa os parâmetros necessários para as bactérias se moverem
+                this.bacteria[i].update(this.food, this.predators, this.obstacles, this.bacteria, 1);
             }
         }
         
@@ -513,7 +514,7 @@ class Simulation {
             
             // Atualiza o predador baseado na velocidade da simulação
             for (let s = 0; s < this.speed; s++) {
-                this.predators[i].update();
+                this.predators[i].update(this.bacteria, this.obstacles, this.predators);
             }
         }
         
@@ -644,7 +645,18 @@ class Simulation {
             totalHealth += bacteria.health;
 
             // Estatísticas do Q-Learning
-            const reward = bacteria.calculateReward();
+            let reward = 0;
+            if (typeof bacteria.calculateReward === 'function') {
+                reward = bacteria.calculateReward();
+            } else {
+                // Valor fallback baseado na saúde e energia
+                reward = (bacteria.health / 100) * 0.5;
+                if (bacteria.states && typeof bacteria.states.getEnergy === 'function') {
+                    reward += (bacteria.states.getEnergy() / 100) * 0.5;
+                } else if (bacteria.energy) {
+                    reward += (bacteria.energy / 100) * 0.5;
+                }
+            }
             totalReward += reward;
 
             // Conta ações de exploração (quando random < 0.1)
@@ -653,10 +665,25 @@ class Simulation {
             }
 
             // Calcula média dos Q-values
-            for (let stateKey in bacteria.qLearning.qTable) {
-                const qValues = Object.values(bacteria.qLearning.qTable[stateKey]);
-                totalQValues += qValues.reduce((a, b) => a + b, 0);
-                totalQEntries += qValues.length;
+            // Verifica acesso seguro à qTable considerando a nova estrutura
+            let qTable = null;
+            
+            // Verifica diferentes caminhos possíveis para a qTable
+            if (bacteria.qLearning && bacteria.qLearning.qTable) {
+                // Estrutura antiga
+                qTable = bacteria.qLearning.qTable;
+            } else if (bacteria.learning && bacteria.learning.qLearning && bacteria.learning.qLearning.qTable) {
+                // Nova estrutura modular
+                qTable = bacteria.learning.qLearning.qTable;
+            }
+            
+            // Só processa se encontrou a qTable
+            if (qTable) {
+                for (let stateKey in qTable) {
+                    const qValues = Object.values(qTable[stateKey]);
+                    totalQValues += qValues.reduce((a, b) => a + b, 0);
+                    totalQEntries += qValues.length;
+                }
             }
         }
 
@@ -1105,6 +1132,33 @@ class Simulation {
                     // Verifica se o tamanho está definido
                     if (!bacteria.size) {
                         bacteria.size = 20;
+                    }
+                    
+                    // Verifica sistemas essenciais
+                    // Verifica se o movimento foi inicializado corretamente
+                    if (!bacteria.movement) {
+                        console.error("Movimento não inicializado para a bactéria", i);
+                        bacteria.movement = new Movement(bacteria.pos.copy(), bacteria.size);
+                    }
+                    
+                    // Inicializa a velocidade se estiver zerada
+                    if (!bacteria.movement.velocity || 
+                        typeof bacteria.movement.velocity.mag !== 'function' || 
+                        bacteria.movement.velocity.mag() === 0) {
+                        bacteria.movement.velocity = createVector(random(-1, 1), random(-1, 1));
+                    }
+                    
+                    // Verifica sistema de estados
+                    if (!bacteria.states) {
+                        console.error("Sistema de estados não inicializado para a bactéria", i);
+                        bacteria.states = new BacteriaStateManager();
+                    }
+                    
+                    // Verifica sistema de reprodução
+                    if (!bacteria.reproduction) {
+                        console.error("Sistema de reprodução não inicializado para a bactéria", i);
+                        bacteria.reproduction = new Reproduction(bacteria.isFemale);
+                        bacteria.reproduction.setDNA(bacteria.dna);
                     }
                     
                     // Adiciona à simulação

@@ -119,6 +119,14 @@ bacterias/
 │   │   ├── Social.js        # Interações sociais
 │   │   ├── Visualization.js # Representação visual
 │   │   └── index.js         # Integração dos componentes de bactéria
+│   ├── communication/       # Sistema de comunicação modularizado
+│   │   ├── CommunicationUtils.js       # Funções utilitárias
+│   │   ├── CommunicationInterface.js   # Interface de usuário do chat
+│   │   ├── MessageManager.js           # Gerenciamento de mensagens
+│   │   ├── MessageGenerator.js         # Geração de conteúdo de mensagens
+│   │   ├── RelationshipManager.js      # Gerenciamento de relacionamentos
+│   │   ├── CommunicationSystem.js      # Sistema principal
+│   │   └── index.js                    # Integração de componentes
 │   ├── controls/            # Módulos de interface
 │   │   ├── ControlsBase.js  # Classe base de controles
 │   │   ├── DiseaseControls.js # Controles de doenças
@@ -151,7 +159,6 @@ bacterias/
 │   ├── bacteria.js          # Adaptador de bactérias (compatibilidade)
 │   ├── bacteriaStates.js    # Máquina de estados
 │   ├── behavior.js          # Sistema de comportamento
-│   ├── communication.js     # Sistema de comunicação
 │   ├── constants.js         # Constantes globais
 │   ├── disease.js           # Sistema de doenças
 │   ├── dna.js               # Sistema genético
@@ -172,6 +179,21 @@ bacterias/
 ```
 
 ## Otimizações e Melhorias Recentes
+
+### Refatoração do Sistema de Comunicação
+- **Arquitetura Modular**: Sistema de comunicação dividido em componentes especializados
+  - `CommunicationInterface.js`: Gerencia elementos de UI do chat
+  - `MessageManager.js`: Gerencia mensagens e histórico
+  - `MessageGenerator.js`: Gera conteúdo para as mensagens
+  - `RelationshipManager.js`: Gerencia relacionamentos entre bactérias
+  - `CommunicationUtils.js`: Funções utilitárias
+  - `CommunicationSystem.js`: Coordena todos os componentes
+- **Responsabilidade Única**: Cada módulo tem função específica e bem definida
+- **Gerenciamento de Mensagens**: Sistema completo para criação, envio e exibição de mensagens
+- **Sistema de Relacionamentos**: Controle de amizades e inimizades entre bactérias
+- **Personalização de Mensagens**: Mensagens adaptadas à personalidade e condições
+- **Processamento Eficiente**: Otimização para grandes quantidades de bactérias
+- **Retrocompatibilidade**: API pública compatível com código existente
 
 ### Refatoração do Sistema de Movimento
 - **Arquitetura Modular**: Sistema de movimento dividido em componentes especializados

@@ -864,10 +864,162 @@ class EntityManager {
             }
             
             // Processa colisões entre entidades
-            this.processCollisions();
+            if (typeof this.processCollisions === 'function') {
+                this.processCollisions();
+            } else {
+                console.error("[EntityManager] Método processCollisions não encontrado!");
+                // Implementação de emergência para evitar erros
+                this.processCollisionsEmergency();
+            }
             
         } catch (error) {
             console.error("[EntityManager] Erro crítico no update:", error);
+        }
+    }
+
+    /**
+     * Implementação de emergência para processar colisões
+     * Usado como fallback se o método original não for encontrado
+     */
+    processCollisionsEmergency() {
+        try {
+            console.log("[EntityManager] Usando processador de colisões de emergência");
+            // Implementação simplificada para evitar crashes
+            if (!this.bacteria || this.bacteria.length < 2) return;
+            
+            // Filtrar bactérias válidas
+            const validBacteria = this.bacteria.filter(b => 
+                b && b.pos && typeof b.pos.x === 'number' && typeof b.pos.y === 'number'
+            );
+            
+            // Processar apenas uma amostra para não sobrecarregar
+            const sampleSize = Math.min(validBacteria.length, 20);
+            for (let i = 0; i < sampleSize; i++) {
+                for (let j = i + 1; j < sampleSize; j++) {
+                    const b1 = validBacteria[i];
+                    const b2 = validBacteria[j];
+                    
+                    // Calcular distância
+                    const d = dist(b1.pos.x, b1.pos.y, b2.pos.x, b2.pos.y);
+                    const minDist = (b1.size + b2.size) / 2;
+                    
+                    // Se estiver colidindo, separe-os
+                    if (d < minDist) {
+                        // Separação simples
+                        const angle = Math.atan2(b2.pos.y - b1.pos.y, b2.pos.x - b1.pos.x);
+                        const moveAmount = (minDist - d) / 2;
+                        
+                        b1.pos.x -= Math.cos(angle) * moveAmount;
+                        b1.pos.y -= Math.sin(angle) * moveAmount;
+                        b2.pos.x += Math.cos(angle) * moveAmount;
+                        b2.pos.y += Math.sin(angle) * moveAmount;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("[EntityManager] Erro no processador de colisões de emergência:", error);
+        }
+    }
+    
+    /**
+     * Processa colisões entre entidades no simulador
+     * Método principal para detecção e resposta a colisões
+     */
+    processCollisions() {
+        try {
+            // Verificação rápida se há entidades suficientes para processamento
+            if (!this.bacteria || this.bacteria.length < 2) {
+                return;
+            }
+            
+            // Filtra apenas bactérias válidas para processamento
+            const validBacteria = this.bacteria.filter(b => 
+                b && b.pos && typeof b.pos.x === 'number' && typeof b.pos.y === 'number' && 
+                !isNaN(b.pos.x) && !isNaN(b.pos.y)
+            );
+            
+            // Processa colisões entre pares de bactérias
+            for (let i = 0; i < validBacteria.length; i++) {
+                const b1 = validBacteria[i];
+                
+                for (let j = i + 1; j < validBacteria.length; j++) {
+                    const b2 = validBacteria[j];
+                    
+                    // Calcula a distância entre as bactérias
+                    const dx = b2.pos.x - b1.pos.x;
+                    const dy = b2.pos.y - b1.pos.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Determina se há colisão
+                    const minDist = (b1.size + b2.size) / 2;
+                    
+                    if (distance < minDist) {
+                        // Há colisão, resolve a separação física
+                        
+                        // Normaliza o vetor direção
+                        const nx = dx / distance;
+                        const ny = dy / distance;
+                        
+                        // Calcula o quanto precisa separar
+                        const moveAmount = (minDist - distance) / 2;
+                        
+                        // Move as bactérias para longe uma da outra
+                        b1.pos.x -= nx * moveAmount;
+                        b1.pos.y -= ny * moveAmount;
+                        b2.pos.x += nx * moveAmount;
+                        b2.pos.y += ny * moveAmount;
+                        
+                        // Simula um "rebote" nos sistemas de movimento
+                        if (b1.movement && b1.movement.movement && 
+                            b2.movement && b2.movement.movement) {
+                            
+                            // Troca as velocidades entre as bactérias (simplificado)
+                            const t1x = b1.movement.movement.velocity.x;
+                            const t1y = b1.movement.movement.velocity.y;
+                            const t2x = b2.movement.movement.velocity.x;
+                            const t2y = b2.movement.movement.velocity.y;
+                            
+                            // Aplica um fator de amortecimento (0.8)
+                            b1.movement.movement.velocity.x = t2x * 0.8;
+                            b1.movement.movement.velocity.y = t2y * 0.8;
+                            b2.movement.movement.velocity.x = t1x * 0.8;
+                            b2.movement.movement.velocity.y = t1y * 0.8;
+                        }
+                        
+                        // Verifica possibilidade de reprodução se forem sexos opostos
+                        if (b1.isFemale !== b2.isFemale && Math.random() < 0.3) {
+                            // Identifica fêmea e macho
+                            const female = b1.isFemale ? b1 : b2;
+                            const male = b1.isFemale ? b2 : b1;
+                            
+                            // Verifica energia para reprodução
+                            if (female.stateManager && male.stateManager && 
+                                female.stateManager.currentEnergy > 70 && 
+                                male.stateManager.currentEnergy > 70) {
+                                
+                                // Tenta reproduzir se o método existir
+                                if (typeof female.reproduce === 'function') {
+                                    const child = female.reproduce(male);
+                                    if (child) {
+                                        this.bacteria.push(child);
+                                        console.log(`Nova bactéria nasceu! ID: ${child.id}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Log a cada 300 frames
+            if (frameCount % 300 === 0) {
+                console.log(`Processamento de colisões: ${validBacteria.length} bactérias válidas`);
+            }
+            
+        } catch (error) {
+            console.error("[EntityManager] Erro ao processar colisões:", error);
+            // Em caso de erro, tenta o método de emergência
+            this.processCollisionsEmergency();
         }
     }
 }

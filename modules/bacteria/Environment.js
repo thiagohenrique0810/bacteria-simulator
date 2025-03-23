@@ -12,10 +12,10 @@ class BacteriaEnvironment {
 
     /**
      * Analisa o ambiente em volta
-     * @param {Array} food - Array de comida
-     * @param {Array} predators - Array de predadores
-     * @param {Array} obstacles - Array de obstáculos
-     * @param {Array} entities - Array de todas as entidades
+     * @param {Array} food - Array de comida (opcional)
+     * @param {Array} predators - Array de predadores (opcional)
+     * @param {Array} obstacles - Array de obstáculos (opcional)
+     * @param {Array} entities - Array de todas as entidades (opcional)
      * @returns {Object} - Condições do ambiente
      */
     analyzeEnvironment(food, predators, obstacles, entities) {
@@ -27,14 +27,42 @@ class BacteriaEnvironment {
             foodTarget: null,
             mateTarget: null,
             predatorTarget: null,
-            obstacleNearby: false
+            obstacleNearby: false,
+            obstacles: []
         };
+
+        // Tenta obter os dados da simulação se não foram fornecidos
+        try {
+            // Verifica se window.simulationInstance está disponível
+            if (!food && window.simulationInstance && window.simulationInstance.foodManager) {
+                food = window.simulationInstance.foodManager.getFoodArray();
+            }
+            
+            if (!predators && window.simulationInstance && window.simulationInstance.predatorManager) {
+                predators = window.simulationInstance.predatorManager.getPredators();
+            }
+            
+            if (!obstacles && window.simulationInstance && window.simulationInstance.obstacleManager) {
+                obstacles = window.simulationInstance.obstacleManager.getObstacles();
+            }
+            
+            if (!entities && window.simulationInstance && window.simulationInstance.entityManager) {
+                entities = window.simulationInstance.entityManager.getBacteria();
+            }
+        } catch (error) {
+            console.warn("Erro ao obter dados da simulação:", error);
+        }
 
         // Garante que os arrays são válidos
         food = Array.isArray(food) ? food : [];
         predators = Array.isArray(predators) ? predators : [];
         obstacles = Array.isArray(obstacles) ? obstacles : [];
         entities = Array.isArray(entities) ? entities : [];
+        
+        // Registra para depuração
+        if (this.bacteria && this.bacteria.age % 300 === 0) {
+            console.log(`Ambiente da bactéria ${this.bacteria.id}: ${food.length} comidas, ${predators.length} predadores, ${obstacles.length} obstáculos, ${entities.length} entidades`);
+        }
 
         // Verifica comida próxima
         for (const f of food) {
@@ -50,6 +78,9 @@ class BacteriaEnvironment {
                 }
             }
         }
+
+        // Armazena obstáculos para uso no sistema de movimento
+        conditions.obstacles = obstacles;
 
         // Verifica predadores próximos
         for (const p of predators) {
@@ -74,8 +105,26 @@ class BacteriaEnvironment {
             if (e.isFemale !== this.bacteria.isFemale) {
                 const d = dist(this.bacteria.pos.x, this.bacteria.pos.y, e.pos.x, e.pos.y);
                 if (d < this.bacteria.perceptionRadius) {
-                    // Verifica se tem energia suficiente para reprodução
-                    if (e.states && e.states.getEnergy() > 60 && this.bacteria.states.getEnergy() > 60) {
+                    // Obtém a energia do parceiro potencial e da própria bactéria
+                    let partnerEnergy = 0;
+                    let bacteriaEnergy = 0;
+                    
+                    // Verifica energia do parceiro
+                    if (e.stateManager && e.stateManager.currentEnergy !== undefined) {
+                        partnerEnergy = e.stateManager.currentEnergy;
+                    } else if (e.states && typeof e.states.getEnergy === 'function') {
+                        partnerEnergy = e.states.getEnergy();
+                    }
+                    
+                    // Verifica energia da própria bactéria
+                    if (this.bacteria.stateManager && this.bacteria.stateManager.currentEnergy !== undefined) {
+                        bacteriaEnergy = this.bacteria.stateManager.currentEnergy;
+                    } else if (this.bacteria.states && typeof this.bacteria.states.getEnergy === 'function') {
+                        bacteriaEnergy = this.bacteria.states.getEnergy();
+                    }
+                    
+                    // Verifica se ambos têm energia suficiente para reprodução
+                    if (partnerEnergy > 60 && bacteriaEnergy > 60) {
                         conditions.mateNearby = true;
                         
                         // Se não tiver alvo de parceiro ou se este parceiro estiver mais perto

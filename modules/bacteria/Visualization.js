@@ -1,142 +1,189 @@
 /**
- * Classe responsável pela visualização da bactéria
+ * Componente de visualização de bactéria
+ * Responsável por desenhar a bactéria e mostrar informações visuais e de depuração
  */
 class BacteriaVisualizationComponent {
     /**
-     * Inicializa o módulo de visualização
+     * Inicializa o componente de visualização
      * @param {BacteriaBase} bacteria - Referência para a bactéria
      */
     constructor(bacteria) {
         this.bacteria = bacteria;
-        this.size = bacteria.size;
-        this.isFemale = bacteria.isFemale;
-        this.baseColor = this.isFemale ? color(255, 182, 193) : color(173, 216, 230);
-        this.currentColor = this.baseColor;
-        this.transparency = 255;
-        this.isCourting = false;
-        this.courtingEffect = 0;
+        this.showDebugInfo = true; // Ativar informações de debug por padrão
+        this.sizeMultiplier = 1.0; // Multiplicador de tamanho para efeitos visuais
+        this.pulseValue = 0; // Valor para efeito de pulsação
+        this.lastStateChange = 0; // Controla efeitos visuais de mudança de estado
+        this.currentColor = color(255); // Cor atual da bactéria
+        this.targetColor = color(255); // Cor alvo para efeitos de transição
     }
-
+    
+    /**
+     * Atualiza o componente visual
+     */
+    update() {
+        // Efeito de pulsação baseado no frameCount
+        this.pulseValue = sin(frameCount * 0.1) * 0.15;
+        
+        // Recupera o gerenciador de estados se disponível
+        const stateManager = this.bacteria.stateManager;
+        
+        // Atualiza o efeito de transição de cor
+        if (stateManager && stateManager.lastStateChangeTime !== this.lastStateChange) {
+            this.lastStateChange = stateManager.lastStateChangeTime || 0;
+            this.sizeMultiplier = 1.2; // Efeito visual para mudança de estado
+        }
+        
+        // Gradualmente normaliza o tamanho
+        this.sizeMultiplier = lerp(this.sizeMultiplier, 1.0, 0.1);
+    }
+    
     /**
      * Desenha a bactéria
      */
     draw() {
-        push();
+        push(); // Salva o estado de transformação atual
         
-        // Tamanho baseado no DNA
-        const size = this.size * (0.7 + this.bacteria.dna.genes.size * 0.6);
+        // Atualiza os efeitos visuais
+        this.update();
         
-        // Cor base baseada no gênero, DNA e estado
-        let baseColor;
+        // Cores base baseadas no sexo
+        const baseColor = this.bacteria.isFemale ? 
+            color(255, 150, 200) : // Rosa para fêmeas
+            color(150, 200, 255);  // Azul para machos
         
-        if (this.isFemale) {
-            baseColor = color(255, 150, 200); // Rosa para fêmeas
-        } else {
-            baseColor = color(150, 200, 255); // Azul para machos
+        // Calcula tamanho com efeitos visuais
+        const size = this.bacteria.size * this.sizeMultiplier * (1 + this.pulseValue);
+        
+        // Ajustes de cor baseados no estado
+        let currentColor = baseColor;
+        
+        // Ajuste de cor se estiver infectada
+        if (this.bacteria.isInfected) {
+            currentColor = color(200, 150, 0); // Tom amarelado para indicar infecção
         }
         
-        // Ajusta cor com base no DNA
-        const r = baseColor.levels[0] * (0.7 + this.bacteria.dna.genes.colorR * 0.3);
-        const g = baseColor.levels[1] * (0.7 + this.bacteria.dna.genes.colorG * 0.3);
-        const b = baseColor.levels[2] * (0.7 + this.bacteria.dna.genes.colorB * 0.3);
+        // Ajustes baseados no estado atual (se o gerenciador de estados estiver disponível)
+        if (this.bacteria.stateManager) {
+            const state = this.bacteria.stateManager.currentState;
+            
+            // Cores específicas por estado
+            switch (state) {
+                case "resting":
+                    // Adiciona um tom azulado para descanso
+                    currentColor = lerpColor(currentColor, color(100, 150, 200), 0.3);
+                    break;
+                    
+                case "fleeing":
+                    // Vermelho para fuga
+                    currentColor = lerpColor(currentColor, color(255, 0, 0), 0.7);
+                    break;
+                    
+                case "seekingFood":
+                    // Verde para busca de comida
+                    currentColor = lerpColor(currentColor, color(0, 255, 100), 0.3);
+                    break;
+                    
+                case "seekingMate":
+                    // Roxo para busca de parceiro
+                    currentColor = lerpColor(currentColor, color(200, 100, 255), 0.5);
+                    break;
+                    
+                case "exploring":
+                    // Apenas intensifica a cor original para exploração
+                    currentColor = lerpColor(currentColor, color(255), 0.1);
+                    break;
+            }
+            
+            // Ajuste baseado na energia (mais transparente com menos energia)
+            const energyRatio = this.bacteria.stateManager.currentEnergy / 100;
+            const minAlpha = 100; // Alfa mínimo para não ficar completamente invisível
+            const alpha = map(energyRatio, 0, 1, minAlpha, 255);
+            currentColor.setAlpha(alpha);
+        }
         
-        // Cor final
-        const finalColor = color(r, g, b);
-        
-        // Transparência baseada na saúde
-        const alpha = map(this.bacteria.health, 0, 100, 100, 255);
-        finalColor.setAlpha(alpha);
-        
-        // Desenha corpo base da bactéria
-        fill(finalColor);
+        // Desenha o corpo principal da bactéria
         noStroke();
-        
-        // Corpo da bactéria
+        fill(currentColor);
         ellipse(this.bacteria.pos.x, this.bacteria.pos.y, size, size);
         
-        // Indicador de infecção (se presente)
-        if (this.bacteria.isInfected) {
-            // Desenha símbolo de alerta
-            strokeWeight(1.5);
-            stroke(255, 50, 50);
-            noFill();
-            drawingContext.setLineDash([2, 2]);
-            ellipse(this.bacteria.pos.x, this.bacteria.pos.y, size * 1.5, size * 1.5);
-            drawingContext.setLineDash([]);
-            
-            // Pequeno símbolo de doença
-            fill(255, 50, 50);
-            noStroke();
-            const symbolSize = size * 0.2;
-            ellipse(this.bacteria.pos.x, this.bacteria.pos.y - (size * 0.5), symbolSize, symbolSize);
+        // Adiciona sutil brilho/contorno
+        const glowColor = color(currentColor);
+        glowColor.setAlpha(80);
+        fill(glowColor);
+        ellipse(this.bacteria.pos.x, this.bacteria.pos.y, size * 1.2, size * 1.2);
+        
+        // Adiciona pequenos detalhes visuais
+        fill(255, 255, 255, 100); // Brilho branco
+        ellipse(
+            this.bacteria.pos.x - size * 0.25, 
+            this.bacteria.pos.y - size * 0.25, 
+            size * 0.2, 
+            size * 0.2
+        );
+        
+        // Desenha informações de debug se ativado
+        if (this.showDebugInfo) {
+            this.drawDebugInfo();
         }
         
-        // Desenha indicador de estado
-        const stateColor = this.getStateColor();
-        fill(stateColor);
+        pop(); // Restaura estado de transformação
+    }
+    
+    /**
+     * Desenha informações de debug da bactéria
+     */
+    drawDebugInfo() {
+        const bacteria = this.bacteria;
+        const x = bacteria.pos.x;
+        const y = bacteria.pos.y;
+        const size = bacteria.size;
+        
+        // Desenha linha de estado acima da bactéria
+        textAlign(CENTER, BOTTOM);
+        textSize(10);
+        fill(255);
+        stroke(0);
+        strokeWeight(2);
+        
+        // Mostra estado atual e energia
+        let stateText = "?";
+        let energyValue = "?";
+        
+        if (bacteria.stateManager) {
+            stateText = bacteria.stateManager.currentState || "?";
+            energyValue = bacteria.stateManager.currentEnergy.toFixed(0) || "?";
+        }
+        
+        text(`${stateText} [${energyValue}]`, x, y - size * 0.8);
+        
+        // Desenha ID da bactéria
+        textSize(8);
+        text(`ID:${bacteria.id}`, x, y - size * 0.5);
+        
+        // Desenha seta de velocidade se disponível
+        if (bacteria.movement && bacteria.movement.velocity) {
+            const vel = bacteria.movement.velocity;
+            if (vel.mag() > 0.1) { // Só mostra se houver movimento significativo
+                const velScale = 10; // Escala da seta
+                stroke(255, 100, 0);
+                strokeWeight(2);
+                line(x, y, x + vel.x * velScale, y + vel.y * velScale);
+                // Ponta da seta
+                const arrowSize = 5;
+                const angle = vel.heading();
+                const arrowX = x + vel.x * velScale;
+                const arrowY = y + vel.y * velScale;
+                line(arrowX, arrowY, 
+                    arrowX - arrowSize * cos(angle - PI/6), 
+                    arrowY - arrowSize * sin(angle - PI/6));
+                line(arrowX, arrowY, 
+                    arrowX - arrowSize * cos(angle + PI/6), 
+                    arrowY - arrowSize * sin(angle + PI/6));
+            }
+        }
+        
+        // Resetar estilos
         noStroke();
-        ellipse(this.bacteria.pos.x, this.bacteria.pos.y, size * 0.5, size * 0.5);
-        
-        // Indicador de energia (se habilitado)
-        if (window.simulation && window.simulation.showEnergy) {
-            const energyWidth = size * 1.2;
-            const energyHeight = 3;
-            const energyY = this.bacteria.pos.y + (size / 2) + 5;
-            
-            // Fundo da barra
-            fill(50, 50, 50, 150);
-            rect(this.bacteria.pos.x - energyWidth/2, energyY, energyWidth, energyHeight);
-            
-            // Barra de energia
-            const energyLevel = map(this.bacteria.energy, 0, 100, 0, energyWidth);
-            fill(50, 200, 50, 200);
-            rect(this.bacteria.pos.x - energyWidth/2, energyY, energyLevel, energyHeight);
-        }
-        
-        pop();
-    }
-
-    /**
-     * Retorna a cor associada ao estado atual
-     * @returns {p5.Color} Cor do estado
-     */
-    getStateColor() {
-        if (!this.bacteria.states) {
-            return color(150, 150, 150);
-        }
-        
-        switch (this.bacteria.states.getCurrentState()) {
-            case window.BacteriaStates.EXPLORING:
-                return color(50, 200, 50);
-            case window.BacteriaStates.SEARCHING_FOOD:
-                return color(200, 150, 50);
-            case window.BacteriaStates.SEARCHING_MATE:
-                return color(200, 50, 200);
-            case window.BacteriaStates.FLEEING:
-                return color(200, 0, 0);
-            case window.BacteriaStates.RESTING:
-                return color(50, 50, 200);
-            default:
-                return color(150, 150, 150);
-        }
-    }
-
-    /**
-     * Atualiza a visualização com as informações atuais da bactéria
-     * @param {Object} params - Parâmetros de atualização
-     */
-    update(params = {}) {
-        // Ajusta transparência baseada na saúde
-        this.transparency = map(this.bacteria.health, 0, 100, 100, 255);
-
-        // Atualiza estado de cortejo
-        if (params.isCourting) {
-            this.isCourting = params.isCourting;
-            this.courtingEffect = (this.courtingEffect + 0.1) % TWO_PI;
-        } else {
-            this.isCourting = false;
-            this.courtingEffect = 0;
-        }
     }
 }
 

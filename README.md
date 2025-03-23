@@ -30,7 +30,16 @@ Este projeto simula um ecossistema complexo onde bactérias virtuais podem se mo
 - **Máquina de Estados (FSM)**:
   - Estados implementados: exploração, busca por comida, fuga, reprodução, descanso
   - Transições dinâmicas baseadas em condições do ambiente
-  - Sistema modular através da classe `BacteriaStates`
+  - Sistema modular através da classe `BacteriaStateManager`
+  - Gerenciamento de energia baseado no estado atual
+
+- **Sistema Integrado de IA e Movimento**:
+  - Análise do ambiente em tempo real (comida, parceiros, predadores, obstáculos)
+  - Tomada de decisão inteligente baseada nas condições ambientais
+  - Sistema híbrido de aprendizado (Q-Learning e Redes Neurais)
+  - Ações aplicadas diretamente ao sistema de movimento
+  - Comportamentos específicos para busca, fuga, exploração e descanso
+  - Resposta a perigos com desvio de obstáculos e fuga de predadores
 
 - **Aprendizado por Reforço (Q-Learning)**:
   - Sistema de recompensas baseado em ações
@@ -117,6 +126,7 @@ bacterias/
 │   │   ├── Learning.js      # Sistema de aprendizado
 │   │   ├── Movement.js      # Sistema de movimento específico de bactérias
 │   │   ├── Social.js        # Interações sociais
+│   │   ├── StateManager.js  # Gerenciador de estados das bactérias
 │   │   ├── Visualization.js # Representação visual
 │   │   └── index.js         # Integração dos componentes de bactéria
 │   ├── communication/       # Sistema de comunicação modularizado
@@ -179,6 +189,27 @@ bacterias/
 ```
 
 ## Otimizações e Melhorias Recentes
+
+### Melhorias no Sistema de IA e Movimento (Maio/2024)
+- **Integração da IA com Movimento**: Sistema redesenhado para que as bactérias utilizem efetivamente seu sistema de inteligência artificial para tomar decisões de movimento
+  - Análise de ambiente aprimorada para detectar comida, predadores e parceiros
+  - Q-Learning e redes neurais determinando comportamentos adaptativos
+  - Sistema de recompensas refinado para aprendizado eficiente
+- **Compatibilidade entre Sistemas**: 
+  - Implementação híbrida permitindo funcionamento tanto com o novo `stateManager` quanto com o sistema legado `states`
+  - Verificações de segurança para prevenção de erros por referências nulas
+- **Comportamentos de Movimento Avançados**:
+  - `moveRandom`: Exploração eficiente do ambiente
+  - `moveTowards`: Perseguição de alvos (comida, parceiros)
+  - `moveAway`: Fuga de predadores e ameaças
+  - `avoidObstacles`: Sistema inteligente para contornar barreiras
+- **Gerenciamento de Energia**:
+  - Consumo de energia baseado em atividade (movimento, reprodução, etc.)
+  - Recuperação durante períodos de descanso
+  - Tomada de decisão considerando níveis de energia atuais
+- **Sincronização de Sistemas**:
+  - Os movimentos são sincronizados entre o sistema de decisão (IA), gerenciador de estados e sistema físico de movimento
+  - Posições atualizadas consistentemente para evitar comportamentos estacionários
 
 ### Refatoração do Sistema de Comunicação
 - **Arquitetura Modular**: Sistema de comunicação dividido em componentes especializados
@@ -248,6 +279,37 @@ bacterias/
 
 - [p5.js](https://p5js.org/) - Biblioteca para gráficos e interatividade
 
+## Problemas Comuns e Soluções
+
+### Bactérias não se movem
+- **Sintoma**: Bactérias permanecem estáticas mesmo quando deveriam estar se movendo.
+- **Causa provável**: Problemas na integração entre o sistema de IA, gerenciador de estados e sistema de movimento.
+- **Solução**: Verifique se a posição da bactéria está sendo sincronizada com o sistema de movimento. No método `update()` da classe `Bacteria`, a posição deve ser atualizada com base na posição calculada pelo sistema de movimento: `this.pos.x = this.movement.movement.position.x; this.pos.y = this.movement.movement.position.y;`.
+
+### Erros de referência (null ou undefined)
+- **Sintoma**: Erros no console como "Cannot read properties of undefined" ou "Cannot read property 'x' of null".
+- **Causa provável**: Tentativa de acessar propriedades de objetos que ainda não foram inicializados ou foram destruídos.
+- **Solução**: Use verificações de segurança ao acessar propriedades aninhadas. Por exemplo, em vez de `bacteria.states.getEnergy()`, use `bacteria && bacteria.states && typeof bacteria.states.getEnergy === 'function' ? bacteria.states.getEnergy() : defaultValue`.
+
+### Sistema de estados não inicializado
+- **Sintoma**: Erro "Sistema de estados não inicializado para a bactéria X".
+- **Causa provável**: Falha ao criar o gerenciador de estados no construtor da bactéria.
+- **Solução**: Verifique se a classe `BacteriaStateManager` está corretamente carregada antes de criar instâncias de `Bacteria`. O construtor da classe `Bacteria` deve inicializar `this.stateManager` com uma nova instância de `BacteriaStateManager`.
+
+### Problemas de desempenho
+- **Sintoma**: Queda significativa no FPS com muitas bactérias.
+- **Causa provável**: Cálculos excessivos de física, colisões ou lógica de IA muito complexa.
+- **Solução**: 
+  - Reduza a frequência de atualizações de IA para bactérias distantes da área visível
+  - Utilize estruturas de dados espaciais como quadtrees para otimizar detecção de colisões
+  - Limite a quantidade máxima de bactérias ativas simultaneamente
+  - Reduza o cálculo de estatísticas para intervalos maiores (a cada 10-30 frames)
+
+### Problemas de compatibilidade com navegadores
+- **Sintoma**: A simulação não funciona em determinados navegadores ou dispositivos.
+- **Causa provável**: Uso de recursos JavaScript não suportados universalmente.
+- **Solução**: Certifique-se de usar polyfills para recursos modernos do JavaScript e verifique a compatibilidade com os principais navegadores (Chrome, Firefox, Safari, Edge).
+
 ## Como Usar
 
 1. Clone o repositório
@@ -288,10 +350,12 @@ bacterias/
 
 ## Contribuindo
 
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/NovaFeature`)
-3. Commit suas mudanças (`git commit -m 'Adiciona nova feature'`)
-4. Push para a branch (`git push origin feature/NovaFeature`)
+Contribuições são bem-vindas! Para contribuir:
+
+1. Faça um fork do projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
 5. Abra um Pull Request
 
 ## Licença

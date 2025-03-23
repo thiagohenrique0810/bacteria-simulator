@@ -35,17 +35,37 @@ class BacteriaLearning {
         // Garante que conditions seja um objeto válido
         conditions = conditions || {};
         
+        // Obtém a energia normalizada da bactéria (0-1)
+        let normalizedEnergy = 0.5; // Valor padrão caso não consiga obter
+        
+        try {
+            // Tenta obter energia do stateManager (nova implementação)
+            if (this.bacteria.stateManager && this.bacteria.stateManager.currentEnergy !== undefined) {
+                normalizedEnergy = this.bacteria.stateManager.currentEnergy / 100;
+            }
+            // Fallback para o sistema antigo se disponível
+            else if (this.bacteria.states && typeof this.bacteria.states.getEnergy === 'function') {
+                normalizedEnergy = this.bacteria.states.getEnergy() / 100;
+            }
+        } catch (error) {
+            console.warn(`Erro ao obter energia da bactéria ${this.bacteria.id}:`, error);
+        }
+        
+        // Garante que o valor está entre 0 e 1
+        normalizedEnergy = Math.max(0, Math.min(1, normalizedEnergy));
+        
+        // Retorna o array de inputs normalizado
         return [
             this.bacteria.health / 100, // Saúde normalizada
-            this.bacteria.states.getEnergy() / 100, // Energia normalizada
+            normalizedEnergy, // Energia normalizada (já calculada)
             conditions.foodNearby ? 1 : 0, // Comida próxima
             conditions.mateNearby ? 1 : 0, // Parceiro próximo
             conditions.predatorNearby ? 1 : 0, // Predador próximo
             conditions.friendsNearby ? 1 : 0, // Amigos próximos
             conditions.enemiesNearby ? 1 : 0, // Inimigos próximos
             this.bacteria.age / this.bacteria.lifespan, // Idade normalizada
-            this.bacteria.dna.genes.aggressiveness, // Agressividade
-            this.bacteria.dna.genes.sociability // Sociabilidade
+            this.bacteria.dna && this.bacteria.dna.genes ? this.bacteria.dna.genes.aggressiveness || 0.5 : 0.5, // Agressividade
+            this.bacteria.dna && this.bacteria.dna.genes ? this.bacteria.dna.genes.sociability || 0.5 : 0.5 // Sociabilidade
         ];
     }
 
@@ -78,11 +98,26 @@ class BacteriaLearning {
     qLearningDecision(conditions) {
         conditions = conditions || {};
         
+        // Obtém a energia atual (com fallback seguro)
+        let currentEnergy = 50; // Valor padrão
+        try {
+            // Tenta obter energia do stateManager (nova implementação)
+            if (this.bacteria.stateManager && this.bacteria.stateManager.currentEnergy !== undefined) {
+                currentEnergy = this.bacteria.stateManager.currentEnergy;
+            }
+            // Fallback para o sistema antigo se disponível
+            else if (this.bacteria.states && typeof this.bacteria.states.getEnergy === 'function') {
+                currentEnergy = this.bacteria.states.getEnergy();
+            }
+        } catch (error) {
+            console.warn(`Erro ao obter energia da bactéria ${this.bacteria.id} para Q-Learning:`, error);
+        }
+        
         // Verifica se a ação foi recentemente recompensada
         // Converte as condições em uma string para usar como chave no mapa
         const stateKey = JSON.stringify({
             health: Math.floor(this.bacteria.health / 10) * 10,
-            energy: Math.floor(this.bacteria.states.getEnergy() / 10) * 10,
+            energy: Math.floor(currentEnergy / 10) * 10,
             foodNearby: conditions.foodNearby || false,
             mateNearby: conditions.mateNearby || false,
             predatorNearby: conditions.predatorNearby || false,
@@ -175,10 +210,31 @@ class BacteriaLearning {
     updateQTable(conditions, action, reward, newConditions) {
         if (!conditions || !action) return;
         
+        // Garante que as condições são objetos válidos
+        conditions = conditions || {};
+        newConditions = newConditions || {};
+        
+        // Obtém a energia atual (com fallback seguro)
+        let currentEnergy = 50; // Valor padrão
+        let newEnergy = 50; // Valor padrão
+        
+        try {
+            // Tenta obter energia atual do stateManager (nova implementação)
+            if (this.bacteria.stateManager && this.bacteria.stateManager.currentEnergy !== undefined) {
+                currentEnergy = this.bacteria.stateManager.currentEnergy;
+            }
+            // Fallback para o sistema antigo se disponível
+            else if (this.bacteria.states && typeof this.bacteria.states.getEnergy === 'function') {
+                currentEnergy = this.bacteria.states.getEnergy();
+            }
+        } catch (error) {
+            console.warn(`Erro ao obter energia atual para updateQTable:`, error);
+        }
+        
         // Converte condições em chave para a tabela Q
         const stateKey = JSON.stringify({
             health: Math.floor(this.bacteria.health / 10) * 10,
-            energy: Math.floor(this.bacteria.states.getEnergy() / 10) * 10,
+            energy: Math.floor(currentEnergy / 10) * 10,
             foodNearby: conditions.foodNearby || false,
             mateNearby: conditions.mateNearby || false,
             predatorNearby: conditions.predatorNearby || false
@@ -186,7 +242,7 @@ class BacteriaLearning {
         
         const newStateKey = JSON.stringify({
             health: Math.floor(this.bacteria.health / 10) * 10,
-            energy: Math.floor(this.bacteria.states.getEnergy() / 10) * 10,
+            energy: Math.floor(currentEnergy / 10) * 10, // Usamos mesma energia, pois já foi atualizada
             foodNearby: newConditions.foodNearby || false,
             mateNearby: newConditions.mateNearby || false,
             predatorNearby: newConditions.predatorNearby || false
@@ -231,44 +287,55 @@ class BacteriaLearning {
      * @returns {number} - Valor da recompensa
      */
     calculateReward(conditions) {
+        // Garante que conditions é um objeto válido
+        if (!conditions) {
+            return 0;
+        }
+
         let reward = 0;
+        
+        // Obtém a energia atual (com fallback seguro)
+        let currentEnergy = 50; // Valor padrão
+        let currentState = 'exploring'; // Estado padrão
+        
+        try {
+            // Tenta obter valores do stateManager (nova implementação)
+            if (this.bacteria.stateManager) {
+                if (this.bacteria.stateManager.currentEnergy !== undefined) {
+                    currentEnergy = this.bacteria.stateManager.currentEnergy;
+                }
+                if (this.bacteria.stateManager.currentState) {
+                    currentState = this.bacteria.stateManager.currentState;
+                }
+            }
+            // Fallback para o sistema antigo se disponível
+            else if (this.bacteria.states) {
+                if (typeof this.bacteria.states.getEnergy === 'function') {
+                    currentEnergy = this.bacteria.states.getEnergy();
+                }
+                if (typeof this.bacteria.states.getCurrentState === 'function') {
+                    currentState = this.bacteria.states.getCurrentState();
+                }
+            }
+        } catch (error) {
+            console.warn(`Erro ao obter energia/estado para calculateReward:`, error);
+        }
         
         // Recompensas por comida
         if (conditions.foodNearby) {
             reward += 0.5;
-            if (this.bacteria.states.getCurrentState() === window.BacteriaStates.SEARCHING_FOOD) {
+            if (currentState === 'seekingFood' || currentState === window.BacteriaStates?.SEARCHING_FOOD) {
                 reward += 1.0; // Recompensa extra por buscar comida quando está com fome
             }
         }
         
         // Recompensas por parceiros
-        if (conditions.mateNearby && this.bacteria.states.getEnergy() > 70) {
+        if (conditions.mateNearby && currentEnergy > 70) {
             reward += 0.5;
-            if (this.bacteria.states.getCurrentState() === window.BacteriaStates.SEARCHING_MATE) {
+            if (currentState === 'reproducing' || currentState === window.BacteriaStates?.SEARCHING_MATE) {
                 reward += 1.0; // Recompensa extra por buscar parceiro quando tem energia
             }
         }
-        
-        // Recompensas por fugir de predadores
-        if (conditions.predatorNearby) {
-            if (this.bacteria.states.getCurrentState() === window.BacteriaStates.FLEEING) {
-                reward += 2.0; // Recompensa por fugir quando há predador
-            } else {
-                reward -= 1.0; // Penalidade por não fugir quando há predador
-            }
-        }
-        
-        // Recompensas por descansar
-        if (this.bacteria.states.getEnergy() < 30) {
-            if (this.bacteria.states.getCurrentState() === window.BacteriaStates.RESTING) {
-                reward += 0.5; // Recompensa por descansar quando com pouca energia
-            }
-        } else if (this.bacteria.states.getCurrentState() === window.BacteriaStates.RESTING) {
-            reward -= 0.2; // Pequena penalidade por descansar quando tem energia
-        }
-        
-        // Ajusta recompensa com base na saúde
-        reward *= (0.5 + this.bacteria.health / 100);
         
         return reward;
     }

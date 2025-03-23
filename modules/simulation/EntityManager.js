@@ -33,7 +33,7 @@ class EntityManager {
      */
     addBacteria(x, y, dna = null, energy = this.initialEnergy) {
         try {
-            // Se não for fornecido DNA, cria um simplificado
+            // Gera genes aleatórios se não for fornecido DNA
             if (!dna) {
                 dna = {
                     generation: 1,
@@ -60,72 +60,37 @@ class EntityManager {
                 };
             }
             
-            // Cria uma bactéria diretamente sem usar o construtor da classe Bacteria
-            const bacteria = {
-                id: Date.now() + Math.floor(random(0, 1000)),
-                pos: createVector(x, y),
-                size: 20,
-                dna: dna,
-                health: energy,
+            // Cria uma nova bactéria com o novo formato de construtor
+            const bacteria = new Bacteria({
+                x: x,
+                y: y,
+                parentDNA: dna,
                 energy: energy,
-                age: 0,
-                lifespan: dna.baseLifespan,
-                lastMealTime: frameCount,
-                healthLossRate: 0.05,
-                starvationTime: 30 * 60 * 60,
-                isFemale: random() > 0.5,
-                simulation: this.simulation,
-                isInfected: false,
-                activeDiseases: new Set(),
-                immuneMemory: new Set(),
-                canReproduce: true,
-                state: window.BacteriaStates.EXPLORING,
-                movement: {
-                    pos: createVector(x, y),
-                    velocity: createVector(random(-1, 1), random(-1, 1)),
-                    acceleration: createVector(0, 0),
-                    maxSpeed: 2 * dna.genes.speed,
-                    baseMaxSpeed: 2 * dna.genes.speed,
-                    maxForce: 0.1,
-                    avoidRadius: 25,
-                    update: function() {
-                        // Comportamento básico de movimento
-                        this.velocity.add(this.acceleration);
-                        this.velocity.limit(this.maxSpeed);
-                        this.pos.add(this.velocity);
-                        this.acceleration.mult(0);
-                    }
-                },
-                isDead: function() { 
-                    // Lógica simplificada para verificar morte
-                    return this.health <= 0 || this.age >= this.lifespan; 
-                },
-                draw: function() {
-                    // Renderização simplificada
-                    push();
-                    fill(this.isFemale ? color(255, 150, 200) : color(150, 200, 255));
-                    noStroke();
-                    ellipse(this.pos.x, this.pos.y, this.size, this.size);
-                    pop();
-                },
-                update: function() {
-                    // Atualização simplificada
-                    this.age++;
-                    this.health -= this.healthLossRate;
-                    this.movement.update();
-                    // Manter dentro dos limites da tela
-                    this.pos.x = constrain(this.pos.x, 0, width);
-                    this.pos.y = constrain(this.pos.y, 0, height);
-                }
-            };
+                initialState: "exploring",
+                initialEnergy: energy,
+                isFemale: random() > 0.5
+            });
             
-            bacteria.pos = bacteria.movement.pos; // Sincronizar referências
+            // Adiciona velocidade inicial aleatória
+            if (bacteria.movement && bacteria.movement.movement) {
+                const initialVelocity = p5.Vector.random2D();
+                initialVelocity.mult(2); // Velocidade moderada
+                bacteria.movement.movement.velocity.set(initialVelocity);
+                
+                // Força um movimento inicial
+                const initialForce = p5.Vector.random2D();
+                initialForce.mult(1);
+                bacteria.movement.applyForce(initialForce);
+            }
             
-            bacteria.simulation = this.simulation; // Define referência à simulação
+            // Adiciona à lista de bactérias
             this.bacteria.push(bacteria);
+            console.log(`Bactéria adicionada em (${x.toFixed(0)},${y.toFixed(0)}), gênero: ${bacteria.isFemale ? 'feminino' : 'masculino'}`);
+            
             return bacteria;
         } catch (error) {
             console.error("Erro ao adicionar bactéria:", error);
+            console.error(error.stack);
             return null;
         }
     }
@@ -209,54 +174,48 @@ class EntityManager {
                     const x = random(width * 0.8) + width * 0.1; // Evita bordas
                     const y = random(height * 0.8) + height * 0.1; // Evita bordas
                     
-                    // Cria uma instância real de Bacteria
-                    const bacteria = new Bacteria(x, y, null, this.initialEnergy);
+                    // Cria uma instância real de Bacteria com o novo formato
+                    const bacteria = new Bacteria({
+                        x: x,
+                        y: y,
+                        parentDNA: null,
+                        energy: this.initialEnergy,
+                        initialState: "exploring",
+                        initialEnergy: this.initialEnergy,
+                        isFemale: isFemale
+                    });
                     
-                    // Define o gênero
-                    bacteria.isFemale = isFemale;
-                    
-                    // IMPORTANTE: Define a referência à simulação
-                    bacteria.simulation = this.simulation;
-                    
-                    // Configura valores iniciais críticos para evitar morte prematura
-                    bacteria.health = this.initialEnergy;
-                    bacteria.energy = this.initialEnergy;
-                    bacteria.age = 0;
-                    bacteria.lastMealTime = frameCount;
-                    
-                    // Define a cor com base no gênero (propriedade necessária para visualização)
-                    bacteria.color = isFemale ? color(255, 150, 200) : color(150, 200, 255);
-                    
-                    // Verifica se o tamanho está definido
-                    if (!bacteria.size) {
-                        bacteria.size = 20;
-                    }
-                    
-                    // Verifica sistemas essenciais
-                    // Verifica se o movimento foi inicializado corretamente
+                    // Verifica sistema de movimento
                     if (!bacteria.movement) {
                         console.error("Movimento não inicializado para a bactéria", i);
-                        bacteria.movement = new Movement(bacteria.pos.copy(), bacteria.size);
+                        bacteria.movement = new BacteriaMovement(bacteria);
                     }
                     
                     // Inicializa a velocidade se estiver zerada
-                    if (!bacteria.movement.velocity || 
-                        typeof bacteria.movement.velocity.mag !== 'function' || 
-                        bacteria.movement.velocity.mag() === 0) {
-                        bacteria.movement.velocity = createVector(random(-1, 1), random(-1, 1));
+                    if (!bacteria.movement.movement || 
+                        !bacteria.movement.movement.velocity || 
+                        typeof bacteria.movement.movement.velocity.mag !== 'function' || 
+                        bacteria.movement.movement.velocity.mag() === 0) {
+                        
+                        // Cria uma velocidade inicial
+                        const initialVelocity = p5.Vector.random2D();
+                        initialVelocity.mult(2); // Velocidade moderada
+                        
+                        if (bacteria.movement.movement) {
+                            bacteria.movement.movement.velocity = initialVelocity;
+                        } else {
+                            console.warn("Sistema de movimento incompleto na bactéria", i);
+                        }
+                        
+                        // Aplica uma força inicial também
+                        bacteria.movement.applyForce(p5.Vector.random2D());
                     }
                     
                     // Verifica sistema de estados
-                    if (!bacteria.states) {
+                    if (!bacteria.stateManager) {
                         console.error("Sistema de estados não inicializado para a bactéria", i);
-                        bacteria.states = new BacteriaStateManager();
-                    }
-                    
-                    // Verifica sistema de reprodução
-                    if (!bacteria.reproduction) {
-                        console.error("Sistema de reprodução não inicializado para a bactéria", i);
-                        bacteria.reproduction = new Reproduction(bacteria.isFemale);
-                        bacteria.reproduction.setDNA(bacteria.dna);
+                        bacteria.stateManager = new BacteriaStateManager(bacteria);
+                        bacteria.stateManager.setCurrentState("exploring");
                     }
                     
                     // Adiciona à simulação
@@ -269,12 +228,15 @@ class EntityManager {
                 }
             }
             
-            // Tamanho do array de bactérias depois
-            const afterCount = this.bacteria.length;
-            console.log("Bactérias depois:", afterCount);
-            console.log("Bactérias adicionadas:", afterCount - beforeCount);
+            // Atualiza estatísticas
+            console.log(`Adicionadas ${this.bacteria.length - beforeCount} bactérias. Total: ${this.bacteria.length}`);
+            
+            // Atualiza o contador de bactérias
+            if (this.simulation.stats) {
+                this.simulation.stats.totalBacteria = this.bacteria.length;
+            }
         } catch (error) {
-            console.error("Erro ao adicionar bactérias:", error);
+            console.error("Erro geral ao adicionar bactérias:", error);
             console.error(error.stack);
         }
     }

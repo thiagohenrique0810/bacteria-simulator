@@ -1,334 +1,365 @@
 /**
- * Classe principal que representa uma bactéria
+ * Módulo de bactéria
  * Integra todos os componentes em um sistema único
  */
-class Bacteria {
+class Bacteria extends BacteriaBase {
     /**
-     * Cria uma nova bactéria
-     * @param {number} x - Posição X inicial
-     * @param {number} y - Posição Y inicial
-     * @param {Object} parentDNA - DNA dos pais (opcional)
-     * @param {number} energy - Energia inicial
+     * Inicializa uma nova bactéria
+     * @param {Object} params - Parâmetros de inicialização
      */
-    constructor(x, y, parentDNA = null, energy = 100) {
-        // Inicializa a base da bactéria
-        this.base = new BacteriaBase(x, y, parentDNA, energy);
+    constructor(params = {}) {
+        // Extrai parâmetros
+        const { x, y, parentDNA, energy = 100, initialState, initialEnergy } = params;
         
-        // Acesso direto a propriedades importantes da base
-        this.pos = this.base.pos;
-        this.size = this.base.size;
-        this.dna = this.base.dna;
-        this.health = this.base.health;
-        this.energy = this.base.energy;
-        this.age = this.base.age;
-        this.lifespan = this.base.lifespan;
-        this.isFemale = this.base.isFemale;
-        this.isInfected = this.base.isInfected;
-        this.activeDiseases = this.base.activeDiseases;
-        this.immuneMemory = this.base.immuneMemory;
-        this.canReproduce = this.base.canReproduce;
-        this.id = this.base.id;
-        this.perceptionRadius = this.base.perceptionRadius;
+        // Chama construtor da classe pai
+        super({ x, y, parentDNA, energy });
         
-        // Inicializa subsistemas
-        this.states = new BacteriaStateManager();
-        this.movement = new BacteriaMovement(this.base);
-        this.environment = new BacteriaEnvironment(this.base);
-        this.learning = new BacteriaLearning(this.base);
-        this.social = new BacteriaSocial(this.base);
-        this.reproduction = new Reproduction(this.isFemale);
-        this.reproduction.setDNA(this.dna);
-        this.visualization = new BacteriaVisualizationComponent(this.base);
+        // Inicializa comportamentos
+        this.initBehaviors();
         
-        // Estado atual
-        this.state = window.BacteriaStates.EXPLORING;
+        // Inicializa sistema de movimento (verificando se existe)
+        try {
+            this.movement = new BacteriaMovement(this);
+            if (!this.movement) {
+                console.error(`Falha ao criar sistema de movimento para bactéria ${this.id}`);
+                // Tenta criar novamente com um construtor alternativo
+                this.movement = new window.BacteriaMovement(this);
+            }
+        } catch (error) {
+            console.error(`Erro ao inicializar sistema de movimento: ${error.message}`);
+            // Tenta um fallback se disponível
+            if (typeof window.BacteriaMovement === 'function') {
+                this.movement = new window.BacteriaMovement(this);
+            }
+        }
         
-        // Referência à simulação
-        this.simulation = null;
+        // Inicializa gerenciador de estados (verificando se existe)
+        try {
+            this.stateManager = new BacteriaStateManager(this);
+            if (!this.stateManager) {
+                console.error(`Falha ao criar gerenciador de estados para bactéria ${this.id}`);
+                // Tenta criar novamente com um construtor alternativo
+                this.stateManager = new window.BacteriaStateManager(this);
+            }
+        } catch (error) {
+            console.error(`Erro ao inicializar gerenciador de estados: ${error.message}`);
+            // Tenta um fallback se disponível
+            if (typeof window.BacteriaStateManager === 'function') {
+                this.stateManager = new window.BacteriaStateManager(this);
+            }
+        }
         
-        // Adiciona referências cruzadas
-        this.base.states = this.states;
-        this.base.visualization = this.visualization;
-        this.base.simulation = this.simulation;
+        // Inicializa componente de visualização
+        try {
+            this.visualization = new BacteriaVisualizationComponent(this);
+        } catch (error) {
+            console.error(`Erro ao inicializar visualização: ${error.message}`);
+            // Tenta um fallback se disponível
+            if (typeof window.BacteriaVisualizationComponent === 'function') {
+                this.visualization = new window.BacteriaVisualizationComponent(this);
+            }
+        }
         
-        // Proxy para facilitar acesso aos mapas e métodos sociais
-        this.friendships = this.social.friendships;
-        this.enemies = this.social.enemies;
+        // Inicializa em estado específico se fornecido
+        if (initialState && this.stateManager && typeof this.stateManager.setCurrentState === 'function') {
+            this.stateManager.setCurrentState(initialState);
+        }
+
+        // Configurar energia inicial se fornecida
+        if (initialEnergy !== undefined && this.stateManager) {
+            this.stateManager.currentEnergy = initialEnergy;
+        }
+        
+        console.log(`Bactéria criada: ID=${this.id}, Sexo=${this.isFemale ? 'Feminino' : 'Masculino'}, Estado=${this.stateManager ? this.stateManager.currentState : 'não definido'}`);
     }
     
     /**
-     * Define a simulação para a bactéria
-     * @param {Simulation} simulation - Referência para a simulação
+     * Inicializa os comportamentos da bactéria
      */
-    setSimulation(simulation) {
-        this.simulation = simulation;
-        this.base.simulation = simulation;
+    initBehaviors() {
+        // Inicializa subsistemas de comportamento
+        this.environment = new BacteriaEnvironment(this);
+        this.learning = new BacteriaLearning(this);
+        this.social = new BacteriaSocial(this);
+        this.reproduction = new Reproduction(this.isFemale);
+        this.reproduction.setDNA(this.dna);
     }
     
     /**
      * Atualiza a bactéria
-     * @param {Array} food - Array de comida disponível
-     * @param {Array} predators - Array de predadores
-     * @param {Array} obstacles - Array de obstáculos
-     * @param {Array} entities - Array de todas as entidades
-     * @param {number} deltaTime - Tempo desde o último frame
-     * @returns {Bacteria|null} - Retorna um filho se reproduzir, null caso contrário
      */
-    update(food, predators, obstacles, entities, deltaTime = 1) {
+    update() {
+        // Incrementa a idade
+        this.age++;
+        
+        // Depuração a cada 60 frames (aproximadamente 1 segundo a 60 FPS)
+        if (this.age % 60 === 0) {
+            console.log(`Bactéria ${this.id}: pos=(${this.pos.x.toFixed(2)},${this.pos.y.toFixed(2)}), idade=${this.age}, energia=${this.stateManager ? this.stateManager.currentEnergy.toFixed(1) : 'N/A'}`);
+        }
+        
         try {
-            // Atualiza idade e propriedades base
-            this.base.age += deltaTime;
-            this.age = this.base.age;
-
-            // Verifica se está morta
-            if (this.isDead()) {
-                return null;
-            }
-
-            // Reduz energia ao longo do tempo
-            this.base.health -= this.base.healthLossRate * deltaTime;
-            this.health = this.base.health;
-
-            // Analisa o ambiente
-            let conditions = this.environment.analyzeEnvironment(food, predators, obstacles, entities) || {};
+            // Analisa o ambiente atual - CRÍTICO para IA
+            const environmentConditions = this.environment.analyzeEnvironment();
             
-            // Considera os relacionamentos na análise do ambiente
-            conditions = this.environment.considerRelationships(conditions, entities);
-
-            // Processa interações sociais
-            this.social.processInteractions(entities);
-
-            // Decide a ação
-            const action = this.learning.decideAction(conditions);
-
-            // Executa a ação
-            this.executeAction(action, conditions, deltaTime);
-
-            // Atualiza o sistema de estados
-            const stateActions = this.states.update({
-                predatorNearby: conditions.predatorNearby || false,
-                foodNearby: conditions.foodNearby || false,
-                mateNearby: conditions.mateNearby || false,
-                forcedState: action
-            });
-
-            // Aplica ações do estado ao movimento
-            this.movement.applyStateActions(stateActions, conditions, deltaTime);
-
-            // Tenta reproduzir
-            const child = this.reproduction.update();
-            if (child) {
-                const childX = this.pos.x + random(-20, 20);
-                const childY = this.pos.y + random(-20, 20);
-                return new Bacteria(childX, childY, child);
+            // Usa o sistema de aprendizado para decidir a próxima ação
+            let action = 'explore'; // Ação padrão
+            
+            if (this.learning && typeof this.learning.decideAction === 'function') {
+                action = this.learning.decideAction(environmentConditions);
+                if (this.age % 60 === 0) {
+                    console.log(`Bactéria ${this.id} decidiu: ${action} baseado no ambiente`);
+                }
             }
-
-            // Sem filhos
-            return null;
+            
+            // Mapeia a ação decidida pela IA para um estado do gerenciador de estados
+            if (this.stateManager) {
+                // Mapeia a ação para o estado correspondente
+                switch (action) {
+                    case 'seekFood':
+                        this.stateManager.setCurrentState('seekingFood');
+                        break;
+                    case 'seekMate':
+                        this.stateManager.setCurrentState('reproducing');
+                        break;
+                    case 'rest':
+                        this.stateManager.setCurrentState('resting');
+                        break;
+                    case 'explore':
+                    default:
+                        this.stateManager.setCurrentState('exploring');
+                        break;
+                }
+                
+                // Atualiza o gerenciador de estados
+                this.stateManager.update(environmentConditions);
+            } else {
+                console.warn(`Sistema de estados não inicializado para a bactéria ${this.id}`);
+            }
+            
+            // Determina as ações de movimento com base na ação escolhida
+            const stateInfo = {
+                state: this.stateManager ? this.stateManager.currentState : 'exploring',
+                shouldMove: true, // Por padrão, as bactérias devem se mover
+                targetType: 'random',
+                speedMultiplier: 1.0
+            };
+            
+            // Ajusta os parâmetros de movimento com base na ação
+            if (action === 'seekFood' && environmentConditions.foodTarget) {
+                stateInfo.targetType = 'food';
+                stateInfo.target = environmentConditions.foodTarget;
+                stateInfo.speedMultiplier = 1.2;
+            } else if (action === 'seekMate' && environmentConditions.mateTarget) {
+                stateInfo.targetType = 'mate';
+                stateInfo.target = environmentConditions.mateTarget;
+                stateInfo.speedMultiplier = 0.8;
+            } else if (action === 'rest') {
+                stateInfo.shouldMove = false;
+            } else if (environmentConditions.predatorNearby) {
+                // Sempre prioriza fuga de predadores
+                stateInfo.targetType = 'escape';
+                stateInfo.target = environmentConditions.predatorTarget;
+                stateInfo.speedMultiplier = 1.5;
+            }
+            
+            // Processa ações com base no estado atual
+            if (this.movement) {
+                // Aplica ações baseadas no estado atual e nas condições ambientais
+                this.movement.applyStateActions(
+                    stateInfo,
+                    environmentConditions,
+                    1/60 // Delta time (assumindo 60 fps)
+                );
+                
+                // Atualiza o sistema de movimento
+                if (this.movement.movement && typeof this.movement.movement.update === 'function') {
+                    // Calcula a razão da idade (0-1)
+                    const ageRatio = this.age / this.lifespan;
+                    
+                    // Verifica se está descansando
+                    const isResting = stateInfo.shouldMove === false;
+                    
+                    this.movement.movement.update(
+                        ageRatio,
+                        environmentConditions.obstacles || [], 
+                        this.size,
+                        isResting,
+                        1/60 // delta time
+                    );
+                } else {
+                    // Fallback: método alternativo para atualizar movimento
+                    this.movement.moveRandom(1/60);
+                }
+                
+                // CRÍTICO: Sincroniza a posição da bactéria com a posição calculada pelo sistema de movimento
+                if (this.movement.movement && this.movement.movement.position) {
+                    this.pos.x = this.movement.movement.position.x;
+                    this.pos.y = this.movement.movement.position.y;
+                }
+            } else {
+                console.warn(`Sistema de movimento não inicializado para a bactéria ${this.id}`);
+            }
+            
+            // Aprende com a experiência atual (fornece feedback para IA)
+            if (this.learning && this.learning.updateQTable && this.stateManager) {
+                // Calcula recompensa com base nas mudanças de energia/saúde
+                const reward = this.calculateReward(action, environmentConditions);
+                
+                // Atualiza o sistema de aprendizado com a recompensa
+                this.learning.updateQTable(
+                    this.learning.lastState, 
+                    this.learning.lastAction, 
+                    reward, 
+                    environmentConditions
+                );
+            }
         } catch (error) {
-            console.error("Erro no update da Bacteria:", error);
-            return null;
+            console.error(`Erro durante atualização da bactéria ${this.id}:`, error);
         }
     }
     
     /**
-     * Executa uma ação
-     * @param {string} action - Ação a ser executada
-     * @param {Object} conditions - Condições do ambiente
-     * @param {number} deltaTime - Tempo desde o último frame
+     * Calcula a recompensa para o sistema de aprendizado
+     * @param {string} action - Ação tomada
+     * @param {Object} conditions - Condições ambientais 
+     * @returns {number} - Valor da recompensa
      */
-    executeAction(action, conditions, deltaTime) {
-        // Garante valores padrão para parâmetros
-        action = action || 'explore';
-        conditions = conditions || {};
-        deltaTime = deltaTime || 1;
+    calculateReward(action, conditions) {
+        // Garante que conditions é um objeto válido
+        if (!conditions) {
+            conditions = {};
+        }
         
-        // Ações baseadas na decisão
+        let reward = 0;
+        
+        // Energia atual
+        const energy = this.stateManager ? this.stateManager.currentEnergy : 50;
+        
+        // Recompensa baseada na energia (valores negativos quando baixa energia)
+        if (energy < 20) reward -= 0.5;
+        else if (energy > 80) reward += 0.3;
+        
+        // Recompensas específicas por ação
         switch (action) {
             case 'seekFood':
-                if (conditions.foodTarget) {
-                    this.movement.moveTowards(conditions.foodTarget.position, 1.2, deltaTime);
-                } else {
-                    this.movement.moveRandom(deltaTime);
-                }
-                // Gasta energia ao procurar comida
-                this.states.removeEnergy(0.15 * deltaTime);
+                // Premia busca por comida quando tem pouca energia
+                if (energy < 50) reward += 0.7;
+                // Penaliza busca por comida quando já tem muita energia
+                if (energy > 70) reward -= 0.3;
+                // Premia muito se encontrou comida
+                if (conditions.foodNearby) reward += 1.0;
                 break;
-            
+                
             case 'seekMate':
-                if (conditions.mateTarget) {
-                    this.movement.moveTowards(conditions.mateTarget.pos, 0.8, deltaTime);
-                } else {
-                    this.movement.moveRandom(deltaTime);
-                }
-                // Gasta energia ao procurar parceiro
-                this.states.removeEnergy(0.2 * deltaTime);
+                // Premia busca por parceiro quando tem muita energia
+                if (energy > 70) reward += 0.7;
+                // Penaliza fortemente busca por parceiro quando tem pouca energia
+                if (energy < 30) reward -= 0.8;
+                // Premia muito se encontrou parceiro
+                if (conditions.mateNearby) reward += 1.0;
                 break;
-            
+                
             case 'rest':
-                // Não se move enquanto descansa
-                this.movement.stop();
-                // Recupera energia ao descansar
-                this.states.addEnergy(0.3 * deltaTime);
+                // Premia descanso quando tem pouca energia
+                if (energy < 30) reward += 0.8;
+                // Penaliza descanso quando tem muita energia
+                if (energy > 70) reward -= 0.5;
                 break;
-            
+                
             case 'explore':
-            default:
-                // Movimento aleatório durante exploração
-                this.movement.moveRandom(deltaTime);
-                // Gasta energia ao explorar
-                this.states.removeEnergy(0.1 * deltaTime);
+                // Pequena recompensa por explorar o ambiente
+                reward += 0.2;
+                // Penaliza exploração quando tem pouca energia
+                if (energy < 20) reward -= 0.4;
                 break;
         }
         
-        // Se detectar predador, entra em modo de fuga independente da ação escolhida
-        if (conditions.predatorNearby && conditions.predatorTarget) {
-            // Calcula vetor de fuga na direção oposta ao predador
-            const fleeVector = p5.Vector.sub(this.pos, conditions.predatorTarget.pos);
-            fleeVector.normalize();
-            fleeVector.mult(3); // Movimento mais rápido ao fugir
-            
-            // Aplica movimento de fuga
-            this.movement.applyForce(fleeVector);
-            
-            // Gasta mais energia ao fugir
-            this.states.removeEnergy(0.25 * deltaTime);
-        }
-    }
-    
-    /**
-     * Faz a bactéria comer comida
-     * @param {Food} food - Comida a ser consumida
-     * @returns {boolean} - Se conseguiu comer
-     */
-    eat(food) {
-        return this.base.eat(food);
-    }
-    
-    /**
-     * Verifica se a bactéria está morta
-     * @returns {boolean} - Se a bactéria está morta
-     */
-    isDead() {
-        return this.base.isDead();
-    }
-    
-    /**
-     * Tenta reproduzir com outra bactéria
-     * @param {Bacteria} partner - Parceiro para reprodução
-     * @returns {boolean} - Se conseguiu reproduzir
-     */
-    mate(partner) {
-        // Verifica se ambos podem se reproduzir
-        if (!this.canReproduce || !partner.canReproduce) {
-            return false;
-        }
+        // Penaliza fortemente se um predador está próximo e não está fugindo
+        if (conditions.predatorNearby && action !== 'rest') reward -= 1.0;
         
-        // Tenta acasalar com o sistema reprodutivo do parceiro
-        return this.reproduction.mate(partner.reproduction);
+        return reward;
     }
     
     /**
      * Desenha a bactéria
      */
     draw() {
-        this.visualization.draw();
+        if (this.visualization) {
+            this.visualization.draw();
+        } else {
+            // Fallback se a visualização não estiver disponível
+            push();
+            fill(this.isFemale ? color(255, 150, 200) : color(150, 200, 255));
+            noStroke();
+            ellipse(this.pos.x, this.pos.y, this.size, this.size);
+            pop();
+        }
     }
     
     /**
-     * Obtém um ID para a bactéria
-     * @param {Bacteria} bacteria - Bactéria a identificar
-     * @returns {number} - ID da bactéria
+     * Processa a interação com outro organismo
+     * @param {Object} other - Outro organismo
      */
-    getBacteriaId(bacteria) {
-        // Delega a função para o componente social
-        if (this.social && typeof this.social.getBacteriaId === 'function') {
-            return this.social.getBacteriaId(bacteria);
+    interact(other) {
+        // Delegado para o componente social
+        this.social.interact(other);
+    }
+    
+    /**
+     * Processa a ingestão de comida
+     * @param {Object} food - Item de comida
+     * @returns {number} - Quantidade de energia obtida
+     */
+    eat(food) {
+        const nutrition = food.nutrition || 20;
+        this.stateManager.addEnergy(nutrition);
+        return nutrition;
+    }
+    
+    /**
+     * Tenta reproduzir com outra bactéria
+     * @param {Bacteria} partner - Parceiro para reprodução
+     * @returns {Bacteria|null} - Nova bactéria ou null se falhar
+     */
+    reproduce(partner) {
+        // Verifica compatibilidade
+        if (!this.canReproduceWith(partner)) {
+            return null;
         }
         
-        // Fallback caso o componente social não esteja disponível
-        if (!bacteria) return 0;
+        // Recupera o DNA do parceiro
+        const partnerDNA = partner.dna;
         
-        // Usa o ID da bactéria se existir
-        if (bacteria.id) {
-            return bacteria.id;
-        }
+        // Realiza a reprodução
+        const childDNA = this.reproduction.reproduce(partnerDNA);
         
-        // Usa o communicationId se existir
-        if (bacteria.communicationId) {
-            return bacteria.communicationId;
-        }
+        // Gasta energia reproduzindo
+        this.stateManager.consumeEnergy(30);
+        partner.stateManager.consumeEnergy(30);
         
-        // Se tudo falhar, gera um ID aleatório
-        bacteria.id = Math.floor(Math.random() * 10000) + 1000;
-        return bacteria.id;
+        // Cria uma nova bactéria com o DNA resultante
+        const childX = (this.pos.x + partner.pos.x) / 2;
+        const childY = (this.pos.y + partner.pos.y) / 2;
+        
+        return new Bacteria({
+            x: childX,
+            y: childY,
+            parentDNA: childDNA,
+            energy: 60,
+            initialState: "resting"
+        });
     }
     
     /**
-     * Adiciona uma bactéria como amiga
-     * @param {Bacteria} bacteria - Bactéria amiga
-     * @param {number} level - Nível de amizade (1-10)
+     * Verifica se pode reproduzir com outra bactéria
+     * @param {Bacteria} partner - Parceiro potencial
+     * @returns {boolean} - Verdadeiro se pode reproduzir
      */
-    addFriend(bacteria, level = 5) {
-        this.social.addFriend(bacteria, level);
-    }
-    
-    /**
-     * Adiciona uma bactéria como inimiga
-     * @param {Bacteria} bacteria - Bactéria inimiga
-     * @param {number} level - Nível de inimizade (1-10)
-     */
-    addEnemy(bacteria, level = 5) {
-        this.social.addEnemy(bacteria, level);
-    }
-    
-    /**
-     * Verifica se outra bactéria é amiga
-     * @param {Bacteria} bacteria - Bactéria a verificar
-     * @returns {boolean} - Se é amiga
-     */
-    isFriend(bacteria) {
-        return this.social.isFriend(bacteria);
-    }
-    
-    /**
-     * Verifica se outra bactéria é inimiga
-     * @param {Bacteria} bacteria - Bactéria a verificar
-     * @returns {boolean} - Se é inimiga
-     */
-    isEnemy(bacteria) {
-        return this.social.isEnemy(bacteria);
-    }
-    
-    /**
-     * Limpa recursos quando a bactéria morre
-     */
-    dispose() {
-        this.base.dispose();
-    }
-    
-    /**
-     * Calcula a recompensa para Q-Learning
-     * @returns {number} - Valor de recompensa
-     */
-    calculateReward() {
-        let reward = 0;
-        
-        // Recompensa baseada na saúde (0-1)
-        const healthReward = this.health / 100;
-        
-        // Recompensa baseada na energia (0-1)
-        const energyReward = this.states ? this.states.getEnergy() / 100 : this.energy / 100;
-        
-        // Penalidade por idade avançada
-        const ageRatio = this.age / this.lifespan;
-        const agePenalty = ageRatio > 0.8 ? (ageRatio - 0.8) * 2 : 0;
-        
-        // Calcula recompensa final
-        reward = (healthReward * 0.4) + (energyReward * 0.6) - agePenalty;
-        
-        // Garante que a recompensa esteja entre -1 e 1
-        return Math.max(-1, Math.min(1, reward));
+    canReproduceWith(partner) {
+        // Sexos diferentes e energia suficiente
+        return this.isFemale !== partner.isFemale && 
+               this.stateManager.currentEnergy > 40 && 
+               partner.stateManager.currentEnergy > 40;
     }
 }
 

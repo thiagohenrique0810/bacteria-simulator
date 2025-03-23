@@ -23,173 +23,6 @@ function setup() {
     const canvas = createCanvas(simulationWidth, simulationHeight);
     canvas.parent('simulation-container');
     
-    // Botão temporário para adicionar bactérias diretamente
-    const emergencyButton = createButton('ADICIONAR 10 BACTÉRIAS (EMERGÊNCIA)');
-    emergencyButton.parent('simulation-container');
-    emergencyButton.position(20, 20);
-    emergencyButton.style('z-index', '10000');
-    emergencyButton.style('background-color', 'red');
-    emergencyButton.style('color', 'white');
-    emergencyButton.style('padding', '10px');
-    emergencyButton.style('font-weight', 'bold');
-    emergencyButton.mousePressed(() => {
-        console.log("Botão de emergência pressionado!");
-        if (window.simulation) {
-            console.log("Adicionando 10 bactérias diretamente via botão de emergência");
-            
-            // Método alternativo que não depende de addMultipleBacteria
-            try {
-                // Número de bactérias para adicionar
-                const count = 10;
-                // Metade fêmeas, metade machos
-                const femaleCount = 5;
-                
-                for (let i = 0; i < count; i++) {
-                    // Determina se esta bactéria será fêmea
-                    const isFemale = i < femaleCount;
-                    
-                    // Verifica se simulation está disponível
-                    if (!simulation) {
-                        console.error("Simulação ainda não disponível");
-                        continue;
-                    }
-                    
-                    try {
-                        // Cria bactéria diretamente, evitando complexidades
-                        const x = random(width);
-                        const y = random(height);
-                        
-                        // Cria uma instância simples de DNA sem depender de sliders
-                        const simpleDNA = {
-                            generation: 1,
-                            baseLifespan: 12 * 3600 * 60,
-                            fitness: 1.0,
-                            genes: {
-                                metabolism: random(0.5, 1.5),
-                                immunity: random(0.5, 1.5),
-                                regeneration: random(0.5, 1.5),
-                                aggressiveness: random(0.5, 1.5),
-                                sociability: random(0.5, 1.5),
-                                curiosity: random(0.5, 1.5),
-                                speed: random(0.5, 1.5),
-                                agility: random(0.5, 1.5),
-                                perception: random(0.5, 1.5),
-                                fertility: random(0.5, 1.5),
-                                mutationRate: random(0.01, 0.1),
-                                adaptability: random(0.5, 1.5),
-                                size: random(0.5, 1.5),
-                                colorR: random(0, 1),
-                                colorG: random(0, 1),
-                                colorB: random(0, 1)
-                            }
-                        };
-                        
-                        // Cria uma bactéria diretamente sem usar o construtor da classe Bacteria
-                        // Isso evita os problemas de controles não inicializados
-                        const bacteria = {
-                            id: Date.now() + Math.floor(random(0, 1000)),
-                            pos: createVector(x, y),
-                            size: 20,
-                            dna: simpleDNA,
-                            health: 150,
-                            energy: 150,
-                            age: 0,
-                            lifespan: simpleDNA.baseLifespan,
-                            lastMealTime: frameCount,
-                            healthLossRate: 0.05,
-                            starvationTime: 30 * 60 * 60,
-                            isFemale: isFemale,
-                            simulation: simulation,
-                            isInfected: false,
-                            activeDiseases: new Set(),
-                            immuneMemory: new Set(),
-                            canReproduce: true,
-                            state: window.BacteriaStates.EXPLORING,
-                            movement: {
-                                pos: createVector(x, y),
-                                velocity: createVector(random(-1, 1), random(-1, 1)),
-                                acceleration: createVector(0, 0),
-                                maxSpeed: 2 * simpleDNA.genes.speed,
-                                baseMaxSpeed: 2 * simpleDNA.genes.speed,
-                                maxForce: 0.1,
-                                avoidRadius: 25,
-                                update: function(ageRatio, obstacles, size, isResting, deltaTime) {
-                                    // Verifique se o agente não está em repouso
-                                    if (!isResting) {
-                                        // Aplica a aceleração à velocidade
-                                        this.velocity.add(this.acceleration);
-                                        
-                                        // Limita a velocidade máxima
-                                        this.velocity.limit(this.maxSpeed);
-                                        
-                                        // Atualiza a posição
-                                        this.pos.add(this.velocity);
-                                        
-                                        // Mantém dentro da tela
-                                        this.pos.x = constrain(this.pos.x, size/2, simulation.width - size/2);
-                                        this.pos.y = constrain(this.pos.y, size/2, simulation.height - size/2);
-                                    }
-                                    
-                                    // Reseta a aceleração para o próximo ciclo
-                                    this.acceleration.mult(0);
-                                }
-                            },
-                            isDead: function() { return false; },
-                            draw: function() {
-                                push();
-                                fill(isFemale ? color(255, 150, 200) : color(150, 200, 255));
-                                noStroke();
-                                ellipse(this.pos.x, this.pos.y, this.size, this.size);
-                                pop();
-                            },
-                            update: function() {
-                                this.age++;
-                                
-                                // Calcula a proporção de idade em relação ao tempo de vida (0-1)
-                                const ageRatio = constrain(this.age / this.lifespan, 0, 1);
-                                
-                                // Determina se a bactéria está descansando
-                                const isResting = this.state === window.BacteriaStates.RESTING;
-                                
-                                // Chama o método update do movimento com os parâmetros corretos
-                                this.movement.update(
-                                    ageRatio,
-                                    simulation.obstacles, 
-                                    this.size,
-                                    isResting,
-                                    1
-                                );
-                                
-                                // Sincroniza as posições
-                                this.pos.x = this.movement.pos.x;
-                                this.pos.y = this.movement.pos.y;
-                                
-                                // Manter dentro dos limites da tela
-                                this.pos.x = constrain(this.pos.x, 0, width);
-                                this.pos.y = constrain(this.pos.y, 0, height);
-                            }
-                        };
-                        
-                        bacteria.pos = bacteria.movement.pos; // Sincronizar referências
-                        
-                        // Adiciona à simulação
-                        simulation.bacteria.push(bacteria);
-                        
-                        console.log(`Bactéria ${i+1} criada com sucesso: ${isFemale ? 'fêmea' : 'macho'}`);
-                    } catch (e) {
-                        console.error("Erro ao criar bactéria:", e);
-                    }
-                }
-                
-                console.log(`Adicionadas ${count} bactérias. Total atual: ${simulation.bacteria.length}`);
-            } catch (e) {
-                console.error("Erro geral ao adicionar bactérias:", e);
-            }
-        } else {
-            console.error("Simulação não disponível ainda");
-        }
-    });
-    
     // Aguarda um momento para garantir que o p5.js está pronto
     window.setTimeout(() => {
         // Inicializa a simulação
@@ -207,6 +40,9 @@ function setup() {
         
         // Configura a simulação
         simulation.setup();
+        
+        // Inicializa os controles de interface
+        initControls();
         
         // Marca setup como completo
         setupComplete = true;
@@ -331,7 +167,11 @@ function mouseDragged() {
         simulation.selectedBacteria.movement.velocity.set(0, 0);
         
         // Corrige o acesso ao estado
-        if (simulation.selectedBacteria.states && typeof simulation.selectedBacteria.states.setCurrentState === 'function') {
+        if (simulation.selectedBacteria.stateManager && 
+            typeof simulation.selectedBacteria.stateManager.setCurrentState === 'function') {
+            simulation.selectedBacteria.stateManager.setCurrentState("resting");
+        } else if (simulation.selectedBacteria.states && 
+                  typeof simulation.selectedBacteria.states.setCurrentState === 'function') {
             simulation.selectedBacteria.states.setCurrentState(window.BacteriaStates.RESTING);
         } else if (simulation.selectedBacteria.state) {
             // Fallback para o método antigo
@@ -427,4 +267,83 @@ function keyPressed() {
             break;
     }
     return false;
+}
+
+// Inicializa controles de interface
+function initControls() {
+    // Botão de emergência
+    emergencyButton = createButton('EMERGÊNCIA');
+    emergencyButton.position(10, height - 50);
+    emergencyButton.size(100, 40);
+    emergencyButton.style('background-color', '#ff3333');
+    emergencyButton.style('color', '#ffffff');
+    emergencyButton.style('font-weight', 'bold');
+    emergencyButton.style('border', 'none');
+    emergencyButton.style('border-radius', '5px');
+    emergencyButton.style('cursor', 'pointer');
+    
+    emergencyButton.mousePressed(function() {
+        console.log("Botão de emergência pressionado - criando novas bactérias");
+        
+        // Cria 10 novas bactérias no meio da tela com movimento inicial
+        for (let i = 0; i < 10; i++) {
+            // Posição aleatória próxima ao centro
+            const x = width/2 + random(-100, 100);
+            const y = height/2 + random(-100, 100);
+            
+            // Cria a bactéria com estado inicial "exploring" e energia inicial 70
+            const bacteria = new Bacteria({
+                x: x,
+                y: y,
+                initialState: "exploring",
+                initialEnergy: 70
+            });
+            
+            // Adiciona velocidade inicial aleatória
+            const initialVelocity = p5.Vector.random2D();
+            initialVelocity.mult(2); // Velocidade moderada
+            bacteria.movement.velocity.set(initialVelocity);
+            
+            // Força um movimento inicial
+            const initialForce = p5.Vector.random2D();
+            initialForce.mult(1);
+            bacteria.movement.applyForce(initialForce);
+            
+            // Adiciona a bactéria à simulação
+            simulation.entityManager.addBacteria(bacteria);
+            
+            // Log de criação
+            console.log(`Criada bactéria de emergência ID=${bacteria.id}, sexo=${bacteria.isFemale ? 'F' : 'M'}`);
+        }
+    });
+    
+    // Botão toggle de depuração
+    debugButton = createButton('DEBUG: ON');
+    debugButton.position(120, height - 50);
+    debugButton.size(100, 40);
+    debugButton.style('background-color', '#33aa33');
+    debugButton.style('color', '#ffffff');
+    debugButton.style('font-weight', 'bold');
+    debugButton.style('border', 'none');
+    debugButton.style('border-radius', '5px');
+    debugButton.style('cursor', 'pointer');
+    
+    // Estado inicial do debug
+    let debugEnabled = true;
+    
+    debugButton.mousePressed(function() {
+        debugEnabled = !debugEnabled;
+        
+        // Atualiza o texto do botão
+        debugButton.html(debugEnabled ? 'DEBUG: ON' : 'DEBUG: OFF');
+        
+        // Atualiza o estilo do botão
+        debugButton.style('background-color', debugEnabled ? '#33aa33' : '#666666');
+        
+        // Atualiza o modo de debug na renderização
+        if (simulation && simulation.renderSystem) {
+            simulation.renderSystem.setDebugMode(debugEnabled);
+            console.log(`Modo de depuração ${debugEnabled ? 'ativado' : 'desativado'}`);
+        }
+    });
 } 

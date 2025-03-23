@@ -65,11 +65,16 @@ class DNA {
                 b: random(-50, 50)
             },
             
-            // Novos atributos
+            // Atributos cognitivos e de comunicação
+            intelligence: random(0, 1),      // Capacidade cognitiva
+            communicationLevel: random(0, 1), // Habilidade de comunicação básica
+            neuralCommunication: random(0, 1), // Capacidade de comunicação neural
+            vocabularySize: random(0.2, 1),  // Tamanho do vocabulário
+            
+            // Outros atributos
             nightVision: random(0, 1),       // Capacidade de ver no escuro 
             resourceEfficiency: random(0.5, 1.5), // Eficiência no uso de recursos
             diseaseResistance: random(0, 1), // Resistência a doenças
-            communicationLevel: random(0, 1) // Habilidade de comunicação
         };
     }
 
@@ -137,7 +142,10 @@ class DNA {
             nightVision: { min: 0, max: 1 },
             resourceEfficiency: { min: 0.5, max: 1.5 },
             diseaseResistance: { min: 0, max: 1 },
-            communicationLevel: { min: 0, max: 1 }
+            communicationLevel: { min: 0, max: 1 },
+            intelligence: { min: 0, max: 1 },
+            neuralCommunication: { min: 0, max: 1 },
+            vocabularySize: { min: 0.2, max: 1 }
         };
 
         return ranges[gene] || { min: 0, max: 1 };
@@ -292,6 +300,50 @@ class DNA {
     }
     
     /**
+     * Verifica se existe um gene específico e se está ativo
+     * @param {string} geneName - Nome do gene a verificar
+     * @param {number} threshold - Valor mínimo para considerar o gene ativo (0.5 padrão)
+     * @returns {boolean} - True se o gene existir e estiver ativo
+     */
+    hasGene(geneName, threshold = 0.5) {
+        if (!this.genes) return false;
+        
+        try {
+            // Se o gene for direto do objeto de genes
+            if (this.genes.hasOwnProperty(geneName)) {
+                return this.genes[geneName] >= threshold;
+            }
+            
+            // Se for um gene especial (como neural_communication)
+            // que pode ser armazenado em alguma estrutura específica
+            if (geneName === 'neural_communication') {
+                // Verifica se existe uma propriedade específica para o gene
+                if (this.genes.neural_communication !== undefined) {
+                    return this.genes.neural_communication >= threshold;
+                }
+                
+                // Ou se existe um valor para esse gene em especializações
+                if (Array.isArray(this.genes.specializations)) {
+                    return this.genes.specializations.includes('neural_communication');
+                }
+                
+                // Se não encontrar, tenta um fallback para genes gerais
+                // Possibilidade de usar o gene de inteligência como aproximação
+                if (this.genes.intelligence !== undefined && geneName === 'neural_communication') {
+                    return this.genes.intelligence >= 0.7; // Requer alta inteligência
+                }
+            }
+            
+            // Mais genes especiais podem ser adicionados aqui
+            
+        } catch (error) {
+            console.warn(`Erro ao verificar gene ${geneName}:`, error);
+        }
+        
+        return false;
+    }
+
+    /**
      * Atualiza o valor de fitness
      * @param {number} newFitness - Novo valor de fitness
      */
@@ -320,6 +372,9 @@ class DNA {
             gene_resourceEfficiency: this.genes.resourceEfficiency ? this.genes.resourceEfficiency.toFixed(2) : 'N/A',
             gene_diseaseResistance: this.genes.diseaseResistance ? this.genes.diseaseResistance.toFixed(2) : 'N/A',
             gene_communicationLevel: this.genes.communicationLevel ? this.genes.communicationLevel.toFixed(2) : 'N/A',
+            gene_intelligence: this.genes.intelligence ? this.genes.intelligence.toFixed(2) : 'N/A',
+            gene_neuralCommunication: this.genes.neuralCommunication ? this.genes.neuralCommunication.toFixed(2) : 'N/A',
+            gene_vocabularySize: this.genes.vocabularySize ? this.genes.vocabularySize.toFixed(2) : 'N/A',
             adaptedToEnvironment: this.adaptedToEnvironment.join(', ') || 'Nenhum',
             generation: this.generation
         };

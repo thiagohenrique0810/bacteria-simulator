@@ -397,14 +397,14 @@ class BacteriaMovement {
             
             // Calcula a distância aproximada para rápida verificação
             const approximateDistance = this.getApproximateDistance(obstacle);
-            const detectionRadius = size * 10; // Raio de detecção aumentado
+            const detectionRadius = size * 15; // Aumentado o raio de detecção para detecção mais precoce
             
             // Se o obstáculo estiver próximo, adiciona à lista
             if (approximateDistance < detectionRadius) {
                 // Verificação adicional de colisão
-                const safetyMargin = size * 1.5; // Margem de segurança
+                const safetyMargin = size * 2.0; // Aumentado a margem de segurança
                 if (obstacle.collidesWith(this.bacteria.pos, safetyMargin)) {
-                    // Se já está em colisão, aplica uma forte força de repulsão
+                    // Se já está em colisão, aplica uma força de repulsão muito mais forte
                     this.handleObstacleCollision(obstacle, size);
                     return true;
                 }
@@ -423,15 +423,15 @@ class BacteriaMovement {
             if (!avoided) {
                 const velocity = this.movement.velocity || this.movement.base.velocity;
                 if (velocity && velocity.mag() > 0.1) {
-                    // Prevê posição futura
+                    // Prevê posição futura com alcance maior
                     const predictedPos = createVector(
-                        this.bacteria.pos.x + velocity.x * 10,
-                        this.bacteria.pos.y + velocity.y * 10
+                        this.bacteria.pos.x + velocity.x * 15, // Aumentado o alcance de previsão
+                        this.bacteria.pos.y + velocity.y * 15
                     );
                     
                     // Verifica se a posição prevista colide com algum obstáculo
                     for (const obstacle of obstaclesToAvoid) {
-                        if (obstacle.collidesWith(predictedPos, size)) {
+                        if (obstacle.collidesWith(predictedPos, size * 1.2)) { // Margem de segurança aumentada
                             // Se colide, aplica uma força na direção oposta
                             const obstacleCenter = createVector(
                                 obstacle.x + obstacle.w/2,
@@ -439,7 +439,7 @@ class BacteriaMovement {
                             );
                             const awayVector = p5.Vector.sub(this.bacteria.pos, obstacleCenter);
                             awayVector.normalize();
-                            awayVector.mult(3);
+                            awayVector.mult(5.0); // Força de repulsão aumentada
                             
                             this.movement.applyForce(awayVector);
                             avoided = true;
@@ -489,20 +489,38 @@ class BacteriaMovement {
         const escapeVector = p5.Vector.sub(this.bacteria.pos, obstacleCenter);
         escapeVector.normalize();
         
-        // Força bem forte para garantir que saia do obstáculo
-        escapeVector.mult(size * 0.8);
+        // Força muito mais forte para garantir que saia do obstáculo
+        escapeVector.mult(size * 1.5); // Aumentado significativamente
         
         // Aplica o vetor de fuga diretamente à posição
         this.bacteria.pos.add(escapeVector);
         
-        // Reduz velocidade atual
+        // Reduz velocidade atual drasticamente para evitar continuar na mesma direção
         if (this.movement && this.movement.velocity) {
-            this.movement.velocity.mult(0.5);
+            this.movement.velocity.mult(0.2); // Reduz mais a velocidade
         }
         
-        // Se ainda está em colisão, move um pouco mais
+        // Se ainda está em colisão, move um pouco mais e tenta em diferentes ângulos
         if (obstacle.collidesWith(this.bacteria.pos, size)) {
+            // Primeira tentativa: adicionar mais movimento na mesma direção
             this.bacteria.pos.add(escapeVector);
+            
+            // Segunda tentativa: tentar um ângulo ligeiramente diferente
+            if (obstacle.collidesWith(this.bacteria.pos, size)) {
+                const angle = random(-PI/4, PI/4);
+                escapeVector.rotate(angle);
+                escapeVector.mult(1.5); // Força ainda maior
+                this.bacteria.pos.add(escapeVector);
+                
+                // Log para debug
+                console.log(`Colisão persistente com obstáculo. Tentando ângulo alternativo: ${angle}`);
+            }
+        }
+        
+        // Garante que a posição está sincronizada com o sistema de movimento
+        if (this.movement && this.movement.base) {
+            this.movement.base.position.x = this.bacteria.pos.x;
+            this.movement.base.position.y = this.bacteria.pos.y;
         }
     }
 

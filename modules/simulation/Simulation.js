@@ -87,14 +87,16 @@ class Simulation {
      * Atualiza a simulação
      */
     update() {
-        // Não atualiza se estiver pausado
-        if (this.controlSystem.isPaused()) return;
-
-        // Atualiza o tempo interno da simulação
-        this.time += 1 * this.controlSystem.getSpeed();
+        // Se a simulação estiver pausada, não faz nada
+        if (this.paused) return;
         
-        // Atualiza o sistema de ambiente
-        this.environmentSystem.update();
+        // Atualiza os valores estatísticos
+        this.statsManager.updateStats();
+        
+        // Atualiza o ciclo dia/noite se estiver habilitado
+        if (this.dayNightEnabled) {
+            this.updateDayNightCycle();
+        }
         
         // Atualiza o sistema de doenças
         this.diseaseSystem.update();
@@ -102,15 +104,23 @@ class Simulation {
         // Atualiza o grid espacial
         this.updateSpatialGrid();
         
+        // Processa as bactérias mortas, transformando-as em comida após o tempo definido
+        this.entityManager.processDeadBacteria();
+        
         // Atualiza as bactérias
         const speed = this.controlSystem.getSpeed();
         for (let i = this.entityManager.bacteria.length - 1; i >= 0; i--) {
-            // Se a bactéria morreu, remove da lista
+            // Se a bactéria morreu, adiciona à lista de mortas e remove da lista de vivas
             if (this.entityManager.bacteria[i].isDead()) {
                 // Verifica se a morte foi por doença
                 if (this.entityManager.bacteria[i].isInfected) {
                     this.statsManager.stats.diseaseDeaths++;
                 }
+                
+                // Adiciona à lista de bactérias mortas antes de remover
+                this.entityManager.addDeadBacteria(this.entityManager.bacteria[i]);
+                
+                // Remove da lista de bactérias vivas
                 this.entityManager.bacteria.splice(i, 1);
                 this.statsManager.stats.deaths++;
                 continue;
@@ -123,8 +133,7 @@ class Simulation {
                     this.entityManager.food, 
                     this.entityManager.predators, 
                     this.entityManager.obstacles, 
-                    this.entityManager.bacteria, 
-                    1
+                    this.spatialGrid
                 );
             }
         }
@@ -160,7 +169,30 @@ class Simulation {
      * Desenha a simulação
      */
     draw() {
-        this.renderSystem.draw();
+        // Desenha o fundo
+        this.renderSystem.drawBackground();
+        
+        // Desenha os obstáculos
+        this.renderSystem.drawObstacles();
+        
+        // Desenha a comida
+        this.renderSystem.drawFood();
+        
+        // Desenha as bactérias mortas
+        this.entityManager.drawDeadBacteria();
+        
+        // Desenha as bactérias
+        this.renderSystem.drawBacteria();
+        
+        // Desenha os predadores
+        this.renderSystem.drawPredators();
+        
+        // Desenha os efeitos visuais
+        this.updateEffects();
+        this.drawEffects();
+        
+        // Desenha as estatísticas
+        this.statsManager.draw();
     }
     
     /**

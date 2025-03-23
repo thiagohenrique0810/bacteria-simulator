@@ -110,7 +110,7 @@ class BacteriaLearning {
         
         // Se usar rede neural, pega decisão dela
         if (this.useNeural) {
-            const result = this.neuralDecisionContinuous(normalizedInputs, conditions);
+            const result = this.neuralDecisionContinuous(conditions);
             // Armazena para aprendizado
             this.lastNeuralInputs = normalizedInputs;
             this.lastNeuralOutputs = result;
@@ -126,16 +126,16 @@ class BacteriaLearning {
     
     /**
      * Versão contínua da decisão neural para movimentos mais naturais
-     * @param {Array} inputs - Inputs normalizados para a rede
      * @param {Object} conditions - Condições do ambiente
      * @returns {Object} - Parâmetros de movimento e ação
      */
-    neuralDecisionContinuous(inputs, conditions) {
+    neuralDecisionContinuous(conditions) {
         try {
             // Garante que conditions seja um objeto válido
             conditions = conditions || {};
             
-            // Obtém as coordenadas relativas da bactéria no mundo
+            // Obtém a posição da bactéria
+            const pos = this.bacteria.pos;
             const worldWidth = typeof width !== 'undefined' ? width : 800;
             const worldHeight = typeof height !== 'undefined' ? height : 600;
             
@@ -143,11 +143,10 @@ class BacteriaLearning {
             let relX = 0.5;
             let relY = 0.5;
             
-            if (this.bacteria && this.bacteria.pos && 
-                typeof this.bacteria.pos.x === 'number' && !isNaN(this.bacteria.pos.x) &&
-                typeof this.bacteria.pos.y === 'number' && !isNaN(this.bacteria.pos.y)) {
-                relX = this.bacteria.pos.x / worldWidth;
-                relY = this.bacteria.pos.y / worldHeight;
+            if (pos && typeof pos.x === 'number' && !isNaN(pos.x) &&
+                typeof pos.y === 'number' && !isNaN(pos.y)) {
+                relX = pos.x / worldWidth;
+                relY = pos.y / worldHeight;
                 
                 // Garante que os valores estão entre 0 e 1
                 relX = Math.max(0, Math.min(1, relX));
@@ -211,7 +210,48 @@ class BacteriaLearning {
                     // O cérebro aprende que o comportamento que levou a sair do canto é bom
                     if (this.lastNeuralOutputs && this.lastNeuralInputs) {
                         console.log("Bactéria aprendeu a sair do canto!");
-                        this.brain.train(this.lastNeuralInputs, this.lastNeuralOutputs.movementParams);
+                        
+                        // Verifica se movementParams existe e é um array ou objeto válido
+                        if (this.lastNeuralOutputs.movementParams) {
+                            try {
+                                // Extrai os valores necessários para o treino
+                                const targetArray = [];
+                                
+                                // Se movementParams for um objeto, converte para array
+                                if (typeof this.lastNeuralOutputs.movementParams === 'object' && !Array.isArray(this.lastNeuralOutputs.movementParams)) {
+                                    // Extrai os 5 valores necessários para o treinamento
+                                    // Direção normalizada para 0-1
+                                    targetArray.push(this.lastNeuralOutputs.movementParams.direction / TWO_PI);
+                                    // Velocidade
+                                    targetArray.push(this.lastNeuralOutputs.movementParams.speed);
+                                    // Intensidade do wandering
+                                    targetArray.push(this.lastNeuralOutputs.movementParams.wanderStrength);
+                                    // Intensidade do noise
+                                    targetArray.push(this.lastNeuralOutputs.movementParams.noiseStrength);
+                                    // Peso do alvo
+                                    targetArray.push(this.lastNeuralOutputs.movementParams.targetWeight);
+                                } else if (Array.isArray(this.lastNeuralOutputs.movementParams)) {
+                                    // Se já for um array, usa diretamente
+                                    targetArray.push(...this.lastNeuralOutputs.movementParams);
+                                } else {
+                                    // Se não for nem objeto nem array, cria valores padrão
+                                    targetArray.push(0.5, 0.5, 0.5, 0.5, 0.5);
+                                }
+                                
+                                // Valida o tamanho do array
+                                while (targetArray.length < 5) {
+                                    targetArray.push(0.5); // Preenche com valores padrão se necessário
+                                }
+                                
+                                // Agora treina com o array validado
+                                console.log("Treinando com targets:", targetArray);
+                                this.brain.train(this.lastNeuralInputs, targetArray);
+                            } catch (error) {
+                                console.error("Erro ao treinar rede neural após sair do canto:", error);
+                            }
+                        } else {
+                            console.warn("Impossível treinar: movementParams inválido", this.lastNeuralOutputs);
+                        }
                     }
                 }
             }
@@ -222,109 +262,134 @@ class BacteriaLearning {
             // Inclui informação de canto nos inputs
             const cornerInput = this.cornerData.isStuck ? 1 : (isInCorner ? 0.5 : 0);
             
-            // Adiciona informação de posição e canto aos inputs
-            // Os 12 inputs completos são:
-            // 0: Saúde normalizada (0-1)
-            // 1: Energia normalizada (0-1)
-            // 2: Comida próxima (0/1)
-            // 3: Distância inversamente proporcional à comida (0-1)
-            // 4: Parceiro próximo (0/1)
-            // 5: Distância inversamente proporcional ao parceiro (0-1)
-            // 6: Predador próximo (0/1)
-            // 7: Amigos próximos (0/1)
-            // 8: Idade normalizada (0-1)
-            // 9: Curiosidade (0-1)
-            // 10: Posição relativa X (0-1)
-            // 11: Posição relativa Y (0-1)
-            
             // Substitui o último input (curiosidade) por cornerInput quando a bactéria está presa
             // para manter apenas 12 inputs no total
             if (this.cornerData.isStuck) {
-                inputs[9] = cornerInput; // Substitui curiosidade por cornerInput quando presa
+                conditions.curiosity = cornerInput; // Substitui curiosidade por cornerInput quando presa
             }
             
-            const positionInputs = [...inputs, relX, relY];
+            // Cria o array de inputs normalizado e adiciona as posições relativas
+            // Use normalizeInputs em vez de tentar espalhar o objeto conditions
+            const normalizedInputs = this.normalizeInputs(conditions);
+            const positionInputs = [...normalizedInputs, relX, relY];
             
             // Obtém as saídas contínuas da rede neural
             const outputs = this.brain.predict(positionInputs);
             
-            // Os 5 outputs agora representam:
-            // 0: Direção (0-1, escalado para 0-360 graus)
-            // 1: Velocidade (0-1)
-            // 2: Intensidade de wandering (0-1)
-            // 3: Intensidade de noise (0-1)
-            // 4: Peso do alvo (0-1)
+            // Se os outputs não forem válidos, use valores padrão
+            if (!outputs || !Array.isArray(outputs) || outputs.length < 5) {
+                console.warn("Outputs inválidos da rede neural:", outputs);
+                // Valores padrão para evitar erros
+                return {
+                    direction: random(0, TWO_PI),
+                    speed: 0.5,
+                    wanderStrength: 0.1,
+                    noiseStrength: 0.1,
+                    targetWeight: 0.5
+                };
+            }
             
-            // Converte a direção para graus
-            const direction = outputs[0] * TWO_PI;
+            // Decodifica os outputs para os parâmetros de movimento
+            const movementParams = {
+                direction: outputs[0] * TWO_PI, // Direção entre 0 e 2π
+                speed: outputs[1], // Velocidade entre 0 e 1
+                wanderStrength: outputs[2], // Intensidade do wandering entre 0 e 1
+                noiseStrength: outputs[3], // Intensidade do ruído entre 0 e 1
+                targetWeight: outputs[4] // Peso do alvo entre 0 e 1
+            };
             
-            // Calcula a proximidade da borda (0 na borda, 1 no centro)
-            const borderProximity = Math.min(relX, 1-relX, relY, 1-relY) * 4;
+            // Verifica se a bactéria está perto das bordas
+            const margin = 50;
             
-            // Ajusta parâmetros para situações de canto
-            let wanderStrength, noiseStrength, explorationSpeed;
+            // Detecção de cantos
+            const isNearLeftEdge = pos.x < margin;
+            const isNearRightEdge = pos.x > worldWidth - margin;
+            const isNearTopEdge = pos.y < margin;
+            const isNearBottomEdge = pos.y > worldHeight - margin;
             
-            if (this.cornerData.isStuck) {
-                // Se estiver presa no canto, aumenta drasticamente a aleatoriedade e velocidade
-                wanderStrength = Math.max(0.8, outputs[2]); // Mínimo de 0.8
-                noiseStrength = Math.max(0.6, outputs[3]); // Mínimo de 0.6
-                explorationSpeed = Math.max(0.7, outputs[1]); // Mínimo de 0.7
-            } else {
-                // Comportamento normal, ajustado pela proximidade da borda
-                wanderStrength = outputs[2] * (1 + (1-borderProximity) * 0.3);
-                noiseStrength = outputs[3] * (1 + (1-borderProximity) * 0.2);
+            // Atualiza os dados de canto existentes
+            this.cornerData.framesInCorner = this.cornerData.framesInCorner || 0;
+            
+            // Usa a variável isInCorner já definida anteriormente
+            if (isInCorner) {
+                // Se está em um canto, incrementa o contador
+                this.cornerData.framesInCorner++;
                 
-                // Aumenta a velocidade para explorar mais se estiver em áreas sem alvos
-                explorationSpeed = !conditions.foodNearby && !conditions.mateNearby 
-                    ? outputs[1] * 1.1 // Aumento moderado para exploração
-                    : outputs[1];
-            }
-            
-            // Atualiza os parâmetros de movimento
-            this.movementParams = {
-                direction: direction,
-                speed: explorationSpeed,
-                wanderStrength: wanderStrength,
-                noiseStrength: noiseStrength,
-                targetWeight: outputs[4],
-                isStuck: this.cornerData.isStuck // Indica se está presa para o sistema de movimento
-            };
-            
-            // Determina a ação principal com base nos parâmetros
-            let action;
-            
-            // Regras para decidir a ação
-            if (this.cornerData.isStuck) {
-                // Se estiver presa, prioriza exploração para sair do canto
-                action = 'explore';
-            } else if (outputs[1] < 0.2) { // Velocidade muito baixa
-                action = 'rest';
-            } else if (outputs[4] > 0.7 && conditions.foodNearby) { // Alto peso de alvo e comida próxima
-                action = 'seekFood';
-            } else if (outputs[4] > 0.7 && conditions.mateNearby) { // Alto peso de alvo e parceiro próximo
-                action = 'seekMate';
+                // Se está muito tempo no canto, considera preso
+                if (this.cornerData.framesInCorner > 60 && !this.cornerData.isStuck) {
+                    this.cornerData.isStuck = true;
+                    console.log("Bactéria presa no canto por muito tempo!");
+                    
+                    // Pode aplicar alguma penalidade aqui, mas continua usando os parâmetros normais
+                }
             } else {
-                // Permite explorar cantos, mas com menor probabilidade
-                action = 'explore';
+                // Se saiu do canto e estava preso, considera que aprendeu a sair
+                if (this.cornerData.isStuck) {
+                    this.cornerData.isStuck = false;
+                    
+                    // Aplica reforço positivo por ter saído do canto
+                    // O cérebro aprende que o comportamento que levou a sair do canto é bom
+                    if (this.lastNeuralOutputs && this.lastNeuralInputs) {
+                        console.log("Bactéria aprendeu a sair do canto!");
+                        
+                        // Verificação já implementada anteriormente
+                    }
+                }
+                
+                // Resetar contador de frames no canto
+                this.cornerData.framesInCorner = 0;
             }
             
-            return {
-                action: action,
-                movementParams: this.movementParams
-            };
+            // Treina com base na entrada atual se a bactéria não estiver presa
+            if (!this.cornerData.isStuck && random() < 0.01) { // Treina ocasionalmente (1% de chance)
+                try {
+                    // Cria um array de targets baseado nos parâmetros de movimento atuais
+                    const targetArray = [
+                        movementParams.direction / TWO_PI,
+                        movementParams.speed,
+                        movementParams.wanderStrength,
+                        movementParams.noiseStrength,
+                        movementParams.targetWeight
+                    ];
+                    
+                    // Valida o array de targets
+                    if (Array.isArray(targetArray) && targetArray.length === 5) {
+                        // Salva para possível uso futuro
+                        this.lastNeuralInputs = positionInputs;
+                        this.lastNeuralOutputs = { movementParams: targetArray };
+                        
+                        // Treina a rede para reforçar o comportamento atual
+                        this.brain.train(positionInputs, targetArray);
+                    } else {
+                        console.warn("Array de targets inválido para treinamento:", targetArray);
+                    }
+                } catch (error) {
+                    console.error("Erro durante treinamento neural ocasional:", error);
+                }
+            } else {
+                // Se estiver presa ou não for momento de treinar, apenas salva os dados para uso futuro
+                this.lastNeuralInputs = positionInputs;
+                this.lastNeuralOutputs = { 
+                    movementParams: [
+                        movementParams.direction / TWO_PI,
+                        movementParams.speed,
+                        movementParams.wanderStrength,
+                        movementParams.noiseStrength,
+                        movementParams.targetWeight
+                    ]
+                };
+            }
+            
+            return movementParams;
         } catch (error) {
             console.error("Erro na decisão neural contínua:", error);
             // Retorna valores padrão em caso de erro
             return {
-                action: 'explore',
-                movementParams: {
-                    direction: random(TWO_PI),
-                    speed: 0.5,
-                    wanderStrength: 0.3,
-                    noiseStrength: 0.2,
-                    targetWeight: 0.5,
-                    isStuck: false
-                }
+                direction: random(0, TWO_PI),
+                speed: 0.5,
+                wanderStrength: 0.1,
+                noiseStrength: 0.1,
+                targetWeight: 0.5
             };
         }
     }

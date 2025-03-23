@@ -9,6 +9,12 @@ class InteractionSystem {
      */
     constructor(simulation) {
         this.simulation = simulation;
+        
+        // Configurações de colisão
+        this.bacteriaCollisionEnabled = true;
+        this.bacteriaRepulsionForce = 2.0;
+        
+        console.log("Sistema de interações inicializado com colisões entre bactérias ativadas");
     }
     
     /**
@@ -57,6 +63,11 @@ class InteractionSystem {
                     }
                 }
             }
+        }
+        
+        // Processamento de colisões entre bactérias
+        if (this.bacteriaCollisionEnabled) {
+            this.handleBacteriaCollisions();
         }
         
         // Interações bactéria-bactéria (reprodução)
@@ -148,6 +159,76 @@ class InteractionSystem {
                         }
                     }
                 }
+            }
+        }
+    }
+    
+    /**
+     * Processa colisões entre bactérias e aplica forças de repulsão
+     */
+    handleBacteriaCollisions() {
+        const entityManager = this.simulation.entityManager;
+        const spatialGrid = this.simulation.spatialGrid;
+        
+        // Para cada bactéria, verifica colisões com outras bactérias
+        for (let i = 0; i < entityManager.bacteria.length; i++) {
+            const bacteria = entityManager.bacteria[i];
+            
+            // Verificações de segurança
+            if (!bacteria || !bacteria.pos || !bacteria.movement) {
+                continue;
+            }
+            
+            try {
+                // Usa o grid espacial para obter apenas bactérias próximas
+                const nearbyEntities = spatialGrid.queryRadius(bacteria.pos, bacteria.size *
+                   3);
+                const nearbyBacteria = nearbyEntities.filter(e => 
+                    e instanceof Bacteria && e !== bacteria && e.pos
+                );
+                
+                for (let otherBacteria of nearbyBacteria) {
+                    if (!otherBacteria.pos) continue;
+                    
+                    // Calcula distância entre as bactérias
+                    const d = dist(bacteria.pos.x, bacteria.pos.y, otherBacteria.pos.x, otherBacteria.pos.y);
+                    const minDistance = (bacteria.size + otherBacteria.size) * 0.8; // 80% da soma dos raios
+                    
+                    // Se estão muito próximas (colisão)
+                    if (d < minDistance) {
+                        // Calcula vetor de repulsão
+                        const repulsion = createVector(
+                            bacteria.pos.x - otherBacteria.pos.x,
+                            bacteria.pos.y - otherBacteria.pos.y
+                        );
+                        
+                        // Normaliza e aplica força baseada na proximidade
+                        repulsion.normalize();
+                        const forceMagnitude = this.bacteriaRepulsionForce * (1 + (minDistance - d) / minDistance * 2);
+                        repulsion.mult(forceMagnitude);
+                        
+                        // Aplica força ao sistema de movimento da bactéria
+                        if (bacteria.movement && bacteria.movement.applyForce) {
+                            bacteria.movement.applyForce(repulsion);
+                        } else if (bacteria.movement && bacteria.movement.movement && 
+                                  bacteria.movement.movement.applyForce) {
+                            bacteria.movement.movement.applyForce(repulsion);
+                        }
+                        
+                        // Para colisões muito próximas, move diretamente para evitar sobreposição
+                        if (d < minDistance * 0.5) {
+                            const escapeOffset = p5.Vector.mult(repulsion, 0.5);
+                            bacteria.pos.add(escapeOffset);
+                            
+                            // Log para depuração
+                            if (frameCount % 60 === 0) {
+                                console.log(`Colisão próxima entre bactérias ${bacteria.id} e ${otherBacteria.id}, aplicando deslocamento direto`);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`Erro ao processar colisões para bactéria ${bacteria.id || i}:`, error);
             }
         }
     }

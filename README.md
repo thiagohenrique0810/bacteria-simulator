@@ -62,27 +62,14 @@ Este projeto simula um ecossistema complexo onde bactérias virtuais podem se mo
   - Comunicação entre bactérias próximas
   - Memória de relacionamentos anteriores
 
-### Ecossistema Complexo
-- **Dinâmica Ambiental**:
-  - Ciclo dia/noite afetando comportamentos
-  - Geração de alimentos com taxas configuráveis
-  - Obstáculos e barreiras no ambiente
-  - Predadores que caçam as bactérias
-
-- **Sistema de Doenças**:
-  - Doenças com diferentes sintomas e taxas de contágio
-  - Transmissão por contato entre bactérias
-  - Imunidade adquirida após recuperação
-  - Efeitos visuais para bactérias infectadas
-
-- **Eventos Aleatórios**:
-  - Tempestades
-  - Ondas de calor
-  - Chuva de nutrientes
-  - Mutações espontâneas
-  - Epidemias
-  - Migrações
-  - Terremotos
+- **Sistema de Comunicação Neural**:
+  - Comunicação avançada baseada em redes neurais
+  - Bactérias com gene `neural_communication` podem usar comunicação neural
+  - Codificação de estados internos em mensagens usando autoencoders
+  - Decodificação de mensagens em ações específicas
+  - Avaliação de resultados e recompensas para aprendizado
+  - Três modos de comunicação (AUTO, ON, OFF) controláveis via interface
+  - Estatísticas de uso do sistema neural com feedback visual
 
 ### Interface e Visualização
 - **Controles Avançados**:
@@ -97,11 +84,20 @@ Este projeto simula um ecossistema complexo onde bactérias virtuais podem se mo
   - Efeitos visuais para eventos e interações
   - Modo debug com informações detalhadas
 
+- **Painel de Informações da Bactéria**:
+  - Interface detalhada exibindo dados completos de bactérias selecionadas
+  - Informações sobre ID, geração, idade, saúde e energia
+  - Visualização de todos os genes com barras de progresso para valores
+  - Exibição do estado atual e presença do gene de comunicação neural
+  - Contagem de relacionamentos com outras bactérias
+  - Atualização em tempo real dos valores a cada 0,5 segundos
+  - Integração com o sistema de seleção por clique
+
 ## Controles
 
 - **Mouse**:
-  - Clique em uma bactéria para ver suas informações
-  - Arraste para movimentar a visualização
+  - Clique em uma bactéria para selecionar e ver suas informações detalhadas
+  - Arraste uma bactéria selecionada para movê-la
   - Clique em área vazia para adicionar comida
 
 - **Teclado**:
@@ -110,6 +106,15 @@ Este projeto simula um ecossistema complexo onde bactérias virtuais podem se mo
   - `S`: Salvar estado atual
   - `L`: Carregar último estado salvo
   - `E`: Gerar evento aleatório
+  - `ESC`: Desselecionar bactéria atual e limpar painel de informações
+
+- **Botões de Interface**:
+  - `EMERGÊNCIA`: Pausa a simulação e permite reiniciar
+  - `DEBUG`: Alterna o modo de depuração (informações visuais extras)
+  - `NEURAL`: Alterna entre modos de comunicação neural:
+    - `AUTO`: Apenas bactérias com gene de comunicação neural a utilizam
+    - `ON`: Todas as bactérias usam comunicação neural (modo forçado)
+    - `OFF`: Desativa completamente a comunicação neural
 
 ## Arquitetura do Projeto
 
@@ -137,6 +142,8 @@ bacterias/
 │   │   ├── MessageGenerator.js         # Geração de conteúdo de mensagens
 │   │   ├── RelationshipManager.js      # Gerenciamento de relacionamentos
 │   │   ├── CommunicationSystem.js      # Sistema principal
+│   │   ├── NeuralCommunication.js      # Sistema de comunicação neural
+│   │   ├── initCommunication.js        # Script de inicialização do sistema
 │   │   └── index.js                    # Integração de componentes
 │   ├── controls/            # Módulos de interface
 │   │   ├── ControlsBase.js  # Classe base de controles
@@ -199,6 +206,51 @@ bacterias/
 
 ## Otimizações e Melhorias Recentes
 
+### Implementação do Sistema de Comunicação Neural (Junho/2024)
+- **Sistema Neural para Comunicação entre Bactérias**:
+  - Integração entre sistema de comunicação e redes neurais
+  - Capacidade de codificar e decodificar mensagens usando autoencoders
+  - Interpretação de mensagens em ações concretas (movimento, busca, descanso)
+  - Sistema de avaliação de resultados e recompensas para aprendizado
+  - Interface visual para monitoramento da comunicação neural
+- **Controle por Modos**:
+  - Modo AUTO: Bactérias com gene `neural_communication` usam comunicação neural
+  - Modo ON: Todas as bactérias usam comunicação neural (comunicação forçada)
+  - Modo OFF: Desativa completamente a comunicação neural
+- **Visualização de Estatísticas**:
+  - Monitoramento em tempo real do uso de comunicação neural
+  - Acompanhamento de recompensas médias e evolução do aprendizado
+  - Contagem de bactérias utilizando o sistema neural
+- **Implementação Técnica**:
+  - Integração com o sistema genético (gene de comunicação neural)
+  - Carregamento dinâmico de componentes via `initCommunication.js`
+  - Interface visual com estatísticas de recompensa e uso
+  - Compatibilidade com sistemas existentes através do design modular
+
+### Implementação do Painel de Informações da Bactéria (Julho/2024)
+- **Interface Visual Interativa**:
+  - Painel lateral integrado no container de chat existente
+  - Design responsivo com barras de rolagem para informações extensas
+  - Atualização automática a cada 0,5 segundos das informações da bactéria selecionada
+  - Barras de progresso visuais para genes, facilitando a compreensão dos valores
+  - Destacamento visual de genes especiais como comunicação neural
+- **Seleção e Manipulação**:
+  - Sistema de seleção por clique com feedback visual imediato
+  - Capacidade de arrastar e soltar bactérias selecionadas para reposicionamento
+  - Tecla ESC para desselecionar e limpar o painel de informações
+  - Múltiplos modos de visualização de informações (básico, genético, social)
+- **Informações Detalhadas**:
+  - Identificadores básicos: ID, geração, idade
+  - Atributos físicos: saúde, energia, tamanho, velocidade
+  - Perfil genético: metabolismo, imunidade, agressividade, etc.
+  - Estado atual e habilidades especiais
+  - Informações sobre relacionamentos e comunicação neural
+- **Integração com Sistemas Existentes**:
+  - Compatibilidade com o sistema de DNA para visualização de genes
+  - Integração com o sistema de comunicação para contagem de relacionamentos
+  - Suporte a diferentes implementações (stateManager e states legados)
+  - Tratamento de erros para garantir robustez
+
 ### Melhorias no Sistema de IA e Movimento (Maio/2024)
 - **Integração da IA com Movimento**: Sistema redesenhado para que as bactérias utilizem efetivamente seu sistema de inteligência artificial para tomar decisões de movimento
   - Análise de ambiente aprimorada para detectar comida, predadores e parceiros
@@ -228,6 +280,16 @@ bacterias/
   - `RelationshipManager.js`: Gerencia relacionamentos entre bactérias
   - `CommunicationUtils.js`: Funções utilitárias
   - `CommunicationSystem.js`: Coordena todos os componentes
+  - `NeuralCommunication.js`: Implementa comunicação baseada em redes neurais
+  - `initCommunication.js`: Carrega dinamicamente todos os componentes
+- **Comunicação Neural Avançada**:
+  - Codificação neural de estados internos em mensagens
+  - Decodificação neural de mensagens em ações
+  - Sistema de avaliação de resultados e aprendizado por reforço
+  - Visualização de estatísticas de comunicação em tempo real
+  - Controle de modo (AUTO/ON/OFF) via interface gráfica
+  - Capacidade genética determinando habilidade de comunicação neural
+  - Vocabulário de tokens com significados emergentes
 - **Responsabilidade Única**: Cada módulo tem função específica e bem definida
 - **Gerenciamento de Mensagens**: Sistema completo para criação, envio e exibição de mensagens
 - **Sistema de Relacionamentos**: Controle de amizades e inimizades entre bactérias

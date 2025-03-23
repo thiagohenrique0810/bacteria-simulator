@@ -35,8 +35,21 @@ function setup() {
         // Inicializa o sistema de visualização
         visualization = new SimulationVisualization(simulation);
         
+        // Expõe a simulação globalmente para facilitar o acesso
+        window.simulation = simulation;
+        
         // Inicializa o sistema de comunicação
-        communication = new BacteriaCommunication(simulation);
+        // Primeiro tentar carregar dinamicamente os módulos de comunicação neural
+        loadCommunicationSystem()
+            .then(() => {
+                console.log('Sistema de comunicação neural carregado com sucesso');
+            })
+            .catch(error => {
+                console.warn('Erro ao carregar sistema de comunicação neural:', error);
+                // Fallback: inicializa comunicação padrão sem sistema neural
+                communication = new BacteriaCommunication(simulation);
+                window.bacteria_communication = communication;
+            });
         
         // Configura a simulação
         simulation.setup();
@@ -49,6 +62,40 @@ function setup() {
         
         console.log('Setup completo');
     }, 100);
+}
+
+/**
+ * Carrega o sistema de comunicação neural dinamicamente
+ * @returns {Promise} - Promise que será resolvida quando o sistema for carregado
+ */
+function loadCommunicationSystem() {
+    return new Promise((resolve, reject) => {
+        const initScript = document.createElement('script');
+        initScript.type = 'text/javascript';
+        initScript.src = 'modules/communication/initCommunication.js';
+        initScript.onload = () => {
+            // Verificar a cada 100ms se o sistema foi inicializado
+            const checkInterval = setInterval(() => {
+                if (window.bacteria_communication) {
+                    clearInterval(checkInterval);
+                    communication = window.bacteria_communication;
+                    resolve();
+                }
+            }, 100);
+            
+            // Timeout de segurança após 5 segundos
+            setTimeout(() => {
+                if (!window.bacteria_communication) {
+                    clearInterval(checkInterval);
+                    reject(new Error('Timeout ao esperar inicialização do sistema de comunicação'));
+                }
+            }, 5000);
+        };
+        initScript.onerror = () => {
+            reject(new Error('Erro ao carregar script de inicialização'));
+        };
+        document.head.appendChild(initScript);
+    });
 }
 
 /**
@@ -72,14 +119,13 @@ function draw() {
     // Garante que window.simulation esteja atualizado para referência global
     window.simulation = simulation;
     
-    // Disponibiliza o sistema de comunicação globalmente
-    window.communication = communication;
-    
     // Atualiza a simulação
     simulation.update();
     
-    // Atualiza o sistema de comunicação
-    communication.update();
+    // Atualiza o sistema de comunicação, se estiver disponível
+    if (communication && typeof communication.update === 'function') {
+        communication.update();
+    }
     
     // Desenha a simulação
     visualization.draw();
@@ -87,12 +133,163 @@ function draw() {
     // Exibe informações
     visualization.displayInfo();
     
+    // Atualiza informações da bactéria selecionada no painel
+    if (simulation.selectedBacteria) {
+        // Atualiza em tempo real, a cada 5 frames (aproximadamente 0.08 segundos)
+        if (frameCount % 5 === 0) {
+            // Verifica se é a primeira atualização (precisa de atualização completa)
+            if (!window.lastUpdatedBacteriaId || window.lastUpdatedBacteriaId !== simulation.selectedBacteria.id || frameCount % 30 === 0) {
+                // Atualização completa (a cada 30 frames ou em troca de bactéria)
+                displayBacteriaInfo(simulation.selectedBacteria);
+                window.lastUpdatedBacteriaId = simulation.selectedBacteria.id;
+            } else {
+                // Atualização parcial apenas de valores dinâmicos
+                updateDynamicBacteriaInfo(simulation.selectedBacteria);
+            }
+        }
+    }
+    
     // Estatísticas de depuração
     if (frameCount % 300 === 0) { // A cada 5 segundos aproximadamente
         console.log("Estatísticas de bactérias:", {
-            contagem: simulation.bacteria.length,
-            limite: simulation.populationLimit
+            contagem: simulation.entityManager.bacteria.length,
+            limite: simulation.entityManager.populationLimit
         });
+    }
+}
+
+/**
+ * Exibe informações detalhadas sobre a bactéria no painel lateral
+ * @param {Object} bacteria - A bactéria selecionada
+ */
+function displayBacteriaInfo(bacteria) {
+    // Obtém o container de informações
+    const infoContent = document.getElementById('bacteria-info-content');
+    if (!infoContent || !bacteria) return;
+    
+    // Formata valores numéricos para exibição
+    const formatNumber = (num) => {
+        if (typeof num !== 'number') return 'N/A';
+        return num.toFixed(2);
+    };
+    
+    // Formata porcentagens para exibição
+    const formatPercent = (num) => {
+        if (typeof num !== 'number') return 'N/A';
+        return (num * 100).toFixed(0) + '%';
+    };
+    
+    // Cria barras de progresso para genes
+    const createGeneBar = (value) => {
+        if (typeof value !== 'number') return '<span class="info-value">N/A</span>';
+        const percent = Math.min(Math.max(value, 0), 1) * 100;
+        return `
+            <div class="gene-bar">
+                <div class="gene-value" style="width: ${percent}%"></div>
+            </div>
+        `;
+    };
+    
+    // Constrói o HTML com as informações da bactéria
+    let html = `
+        <div>
+            <p><span class="info-label">ID:</span> <span class="info-value">${bacteria.id || 'Desconhecido'}</span></p>
+            <p><span class="info-label">Geração:</span> <span class="info-value">${bacteria.dna?.generation || 1}</span></p>
+            <p><span class="info-label">Idade:</span> <span class="info-value" id="bacteria-age">${formatNumber(bacteria.age / 60)} segundos</span></p>
+            <p><span class="info-label">Saúde:</span> <span class="info-value" id="bacteria-health">${formatNumber(bacteria.health)}</span></p>
+            <p><span class="info-label">Energia:</span> <span class="info-value" id="bacteria-energy">${formatNumber(bacteria.energy)}</span></p>
+            <p><span class="info-label">Tamanho:</span> <span class="info-value">${formatNumber(bacteria.size)}</span></p>
+            <p><span class="info-label">Velocidade:</span> <span class="info-value">${formatNumber(bacteria.speed)}</span></p>
+    `;
+    
+    // Adiciona informações sobre os genes, se disponíveis
+    if (bacteria.dna && bacteria.dna.genes) {
+        html += `
+            <hr style="border-color: #363a45; margin: 10px 0;">
+            <p style="font-weight: bold; margin-bottom: 8px;">Genes:</p>
+        `;
+        
+        // Genes principais
+        const mainGenes = [
+            { name: 'Metabolismo', gene: 'metabolism' },
+            { name: 'Imunidade', gene: 'immunity' },
+            { name: 'Regeneração', gene: 'regeneration' },
+            { name: 'Agressividade', gene: 'aggressiveness' },
+            { name: 'Sociabilidade', gene: 'sociability' },
+            { name: 'Curiosidade', gene: 'curiosity' },
+            { name: 'Velocidade', gene: 'speed' },
+            { name: 'Agilidade', gene: 'agility' },
+            { name: 'Percepção', gene: 'perception' }
+        ];
+        
+        // Adiciona cada gene com uma barra de progresso
+        mainGenes.forEach(({ name, gene }) => {
+            const value = bacteria.dna.genes[gene];
+            if (value !== undefined) {
+                html += `
+                    <p>
+                        <span class="info-label">${name}:</span> 
+                        <span class="info-value">${formatNumber(value)}</span>
+                        ${createGeneBar(value)}
+                    </p>
+                `;
+            }
+        });
+        
+        // Adiciona gene de comunicação neural se disponível
+        if (bacteria.dna.hasGene && typeof bacteria.dna.hasGene === 'function') {
+            const hasNeural = bacteria.dna.hasGene('neural_communication');
+            html += `
+                <p>
+                    <span class="info-label">Comunicação Neural:</span> 
+                    <span class="info-value" style="color: ${hasNeural ? '#4CD137' : '#E74C3C'}">${hasNeural ? 'Ativo' : 'Inativo'}</span>
+                </p>
+            `;
+        }
+    }
+    
+    // Adiciona informação sobre o estado atual
+    if (bacteria.stateManager && bacteria.stateManager.getCurrentState) {
+        html += `
+            <hr style="border-color: #363a45; margin: 10px 0;">
+            <p><span class="info-label">Estado Atual:</span> <span class="info-value" id="bacteria-state">${bacteria.stateManager.getCurrentState()}</span></p>
+        `;
+    } else if (bacteria.states && bacteria.states.currentState) {
+        html += `
+            <hr style="border-color: #363a45; margin: 10px 0;">
+            <p><span class="info-label">Estado Atual:</span> <span class="info-value" id="bacteria-state">${bacteria.states.currentState}</span></p>
+        `;
+    }
+    
+    // Adiciona informações sobre relacionamentos, se disponíveis
+    if (window.bacteria_communication && window.bacteria_communication.getRelationship && bacteria.id) {
+        html += `
+            <hr style="border-color: #363a45; margin: 10px 0;">
+            <p style="font-weight: bold; margin-bottom: 8px;">Relacionamentos:</p>
+        `;
+        
+        try {
+            const totalRelationships = window.bacteria_communication.countRelationships(bacteria.id);
+            html += `<p><span class="info-label">Total:</span> <span class="info-value" id="bacteria-relationships">${totalRelationships}</span></p>`;
+        } catch (error) {
+            console.error("Erro ao obter relacionamentos:", error);
+            html += `<p class="info-message">Dados de relacionamento indisponíveis</p>`;
+        }
+    }
+    
+    html += `</div>`;
+    
+    // Atualiza o conteúdo do painel
+    infoContent.innerHTML = html;
+}
+
+/**
+ * Limpa o painel de informações da bactéria
+ */
+function clearBacteriaInfo() {
+    const infoContent = document.getElementById('bacteria-info-content');
+    if (infoContent) {
+        infoContent.innerHTML = '<p class="info-message">Clique em uma bactéria para ver suas informações.</p>';
     }
 }
 
@@ -112,11 +309,14 @@ function mousePressed() {
         return false;
     } else {
         // Verifica se clicou em alguma bactéria
-        for (let b of simulation.bacteria) {
+        for (let b of simulation.entityManager.bacteria) {
             let d = dist(mouseX, mouseY, b.pos.x, b.pos.y);
             if (d < b.size * 3) {
                 simulation.selectedBacteria = b;
                 simulation.isDragging = true;
+                
+                // Exibe informações da bactéria selecionada
+                displayBacteriaInfo(b);
                 
                 // Corrige o acesso à velocidade, verificando a estrutura aninhada
                 try {
@@ -267,6 +467,9 @@ function mouseReleased() {
             console.error("Erro ao definir velocidade após arrasto:", error);
         }
         
+        // Mantém as informações da bactéria visíveis mesmo após soltá-la
+        // Não limpa o painel de informações aqui
+        
         simulation.selectedBacteria = null;
     }
     return false;
@@ -290,6 +493,7 @@ function keyPressed() {
     if (keyCode === ESCAPE) {
         simulation.isDragging = false;
         simulation.selectedBacteria = null;
+        clearBacteriaInfo();
         return false;
     }
 
@@ -328,83 +532,124 @@ function keyPressed() {
     return false;
 }
 
-// Inicializa controles de interface
+/**
+ * Inicializa os controles de interface
+ */
 function initControls() {
-    // Botão de emergência
-    emergencyButton = createButton('EMERGÊNCIA');
-    emergencyButton.position(10, height - 50);
-    emergencyButton.size(100, 40);
-    emergencyButton.style('background-color', '#ff3333');
-    emergencyButton.style('color', '#ffffff');
-    emergencyButton.style('font-weight', 'bold');
-    emergencyButton.style('border', 'none');
-    emergencyButton.style('border-radius', '5px');
-    emergencyButton.style('cursor', 'pointer');
+    // Obtém referências para os botões existentes
+    const emergencyBtn = document.getElementById('emergency-btn');
+    const debugBtn = document.getElementById('debug-btn');
+    const neuralBtn = document.getElementById('neural-btn');
     
-    emergencyButton.mousePressed(function() {
-        console.log("Botão de emergência pressionado - criando novas bactérias");
-        
-        // Cria 10 novas bactérias no meio da tela com movimento inicial
-        for (let i = 0; i < 10; i++) {
-            // Posição aleatória próxima ao centro
-            const x = width/2 + random(-100, 100);
-            const y = height/2 + random(-100, 100);
-            
-            // Cria a bactéria com estado inicial "exploring" e energia inicial 70
-            const bacteria = new Bacteria({
-                x: x,
-                y: y,
-                initialState: "exploring",
-                initialEnergy: 70
-            });
-            
-            // Adiciona velocidade inicial aleatória
-            const initialVelocity = p5.Vector.random2D();
-            initialVelocity.mult(2); // Velocidade moderada
-            bacteria.movement.velocity.set(initialVelocity);
-            
-            // Força um movimento inicial
-            const initialForce = p5.Vector.random2D();
-            initialForce.mult(1);
-            bacteria.movement.applyForce(initialForce);
-            
-            // Adiciona a bactéria à simulação
-            simulation.entityManager.addBacteria(bacteria);
-            
-            // Log de criação
-            console.log(`Criada bactéria de emergência ID=${bacteria.id}, sexo=${bacteria.isFemale ? 'F' : 'M'}`);
+    // Verifica se os botões foram encontrados
+    if (!emergencyBtn || !debugBtn || !neuralBtn) {
+        console.error("Não foi possível encontrar todos os botões de controle");
+        return;
+    }
+    
+    // Configura o botão de emergência
+    emergencyBtn.onclick = () => {
+        // Pausa a simulação
+        if (window.simulation) {
+            window.simulation.pause();
         }
-    });
-    
-    // Botão toggle de depuração
-    debugButton = createButton('DEBUG: ON');
-    debugButton.position(120, height - 50);
-    debugButton.size(100, 40);
-    debugButton.style('background-color', '#33aa33');
-    debugButton.style('color', '#ffffff');
-    debugButton.style('font-weight', 'bold');
-    debugButton.style('border', 'none');
-    debugButton.style('border-radius', '5px');
-    debugButton.style('cursor', 'pointer');
-    
-    // Estado inicial do debug
-    let debugEnabled = true;
-    
-    debugButton.mousePressed(function() {
-        debugEnabled = !debugEnabled;
         
-        // Atualiza o texto do botão
-        debugButton.html(debugEnabled ? 'DEBUG: ON' : 'DEBUG: OFF');
-        
-        // Atualiza o estilo do botão
-        debugButton.style('background-color', debugEnabled ? '#33aa33' : '#666666');
-        
-        // Atualiza o modo de debug na renderização
-        if (simulation && simulation.renderSystem) {
-            simulation.renderSystem.setDebugMode(debugEnabled);
-            console.log(`Modo de depuração ${debugEnabled ? 'ativado' : 'desativado'}`);
+        // Pergunta se deseja salvar o estado atual
+        if (confirm('Simulação pausada! Deseja salvar o estado atual antes de reiniciar?')) {
+            // Implementar lógica de salvamento aqui
+            alert('Funcionalidade de salvamento ainda não implementada');
         }
-    });
+        
+        // Recarrega a página após confirmação
+        if (confirm('Tem certeza que deseja reiniciar a simulação?')) {
+            location.reload();
+        } else {
+            // Retoma a simulação se o usuário cancelar
+            if (window.simulation) {
+                window.simulation.resume();
+            }
+        }
+    };
+    
+    // Estado inicial do modo de depuração
+    let debugMode = false;
+    
+    // Configura o botão de debug
+    debugBtn.onclick = () => {
+        debugMode = !debugMode;
+        
+        if (debugMode) {
+            debugBtn.innerText = 'DEBUG: ON';
+            debugBtn.style.backgroundColor = '#3498DB';
+            
+            // Ativa modo de depuração
+            if (window.simulation && window.simulation.renderSystem) {
+                window.simulation.renderSystem.debugMode = true;
+                console.log('Modo de depuração ativado');
+            }
+        } else {
+            debugBtn.innerText = 'DEBUG: OFF';
+            debugBtn.style.backgroundColor = '#95A5A6';
+            
+            // Desativa modo de depuração
+            if (window.simulation && window.simulation.renderSystem) {
+                window.simulation.renderSystem.debugMode = false;
+                console.log('Modo de depuração desativado');
+            }
+        }
+    };
+    
+    // Estado inicial do modo neural
+    let neuralMode = 'AUTO';
+    
+    // Configura o botão neural
+    neuralBtn.onclick = () => {
+        if (!window.simulation || !window.simulation.communicationSystem) {
+            console.error("Sistema de comunicação não disponível");
+            neuralBtn.style.backgroundColor = '#E74C3C';
+            neuralBtn.innerText = 'NEURAL: ERRO';
+            return;
+        }
+        
+        // Determina o próximo modo
+        let nextMode;
+        switch (neuralMode) {
+            case 'AUTO': nextMode = 'ON'; break;
+            case 'ON': nextMode = 'OFF'; break;
+            case 'OFF': 
+            default: nextMode = 'AUTO'; break;
+        }
+        
+        // Alterna para o próximo modo
+        try {
+            // Chama o método no sistema de comunicação
+            const resultMode = window.simulation.communicationSystem.toggleNeuralCommunication(nextMode);
+            neuralMode = resultMode; // Atualiza com o valor retornado (que pode ser diferente)
+            
+            // Atualiza a aparência do botão
+            switch (neuralMode) {
+                case 'AUTO':
+                    neuralBtn.innerText = 'NEURAL: AUTO';
+                    neuralBtn.style.backgroundColor = '#2ECC71';
+                    break;
+                case 'ON':
+                    neuralBtn.innerText = 'NEURAL: ON';
+                    neuralBtn.style.backgroundColor = '#F39C12';
+                    break;
+                case 'OFF':
+                    neuralBtn.innerText = 'NEURAL: OFF';
+                    neuralBtn.style.backgroundColor = '#95A5A6';
+                    break;
+                default:
+                    neuralBtn.innerText = 'NEURAL: ' + neuralMode;
+                    neuralBtn.style.backgroundColor = '#3498DB';
+            }
+        } catch (error) {
+            console.error("Erro ao alternar modo de comunicação neural:", error);
+            neuralBtn.style.backgroundColor = '#E74C3C';
+            neuralBtn.innerText = 'NEURAL: ERRO';
+        }
+    };
 }
 
 /**
@@ -450,5 +695,59 @@ class PopEffect {
         fill(255, 255, 255, this.alpha);
         text(this.symbol, this.pos.x, this.pos.y);
         pop();
+    }
+}
+
+/**
+ * Atualiza apenas as informações dinâmicas da bactéria (sem reconstruir todo o painel)
+ * @param {Object} bacteria - A bactéria selecionada
+ */
+function updateDynamicBacteriaInfo(bacteria) {
+    if (!bacteria) return;
+    
+    // Formata valores numéricos para exibição
+    const formatNumber = (num) => {
+        if (typeof num !== 'number') return 'N/A';
+        return num.toFixed(2);
+    };
+    
+    // Atualiza os valores dinâmicos usando IDs específicos
+    try {
+        // Atualiza idade
+        const ageElement = document.getElementById('bacteria-age');
+        if (ageElement) ageElement.textContent = `${formatNumber(bacteria.age / 60)} segundos`;
+        
+        // Atualiza saúde
+        const healthElement = document.getElementById('bacteria-health');
+        if (healthElement) healthElement.textContent = formatNumber(bacteria.health);
+        
+        // Atualiza energia
+        const energyElement = document.getElementById('bacteria-energy');
+        if (energyElement) energyElement.textContent = formatNumber(bacteria.energy);
+        
+        // Atualiza estado atual, se disponível
+        const stateElement = document.getElementById('bacteria-state');
+        if (stateElement) {
+            if (bacteria.stateManager && bacteria.stateManager.getCurrentState) {
+                stateElement.textContent = bacteria.stateManager.getCurrentState();
+            } else if (bacteria.states && bacteria.states.currentState) {
+                stateElement.textContent = bacteria.states.currentState;
+            }
+        }
+        
+        // Atualiza relacionamentos, se disponível
+        const relationshipsElement = document.getElementById('bacteria-relationships');
+        if (relationshipsElement && window.bacteria_communication && window.bacteria_communication.countRelationships) {
+            try {
+                const totalRelationships = window.bacteria_communication.countRelationships(bacteria.id);
+                relationshipsElement.textContent = totalRelationships;
+            } catch (error) {
+                console.error("Erro ao atualizar contagem de relacionamentos:", error);
+            }
+        }
+    } catch (error) {
+        console.error("Erro ao atualizar informações dinâmicas:", error);
+        // Em caso de erro, faz a atualização completa
+        displayBacteriaInfo(bacteria);
     }
 } 

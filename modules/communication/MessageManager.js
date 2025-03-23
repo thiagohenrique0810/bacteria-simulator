@@ -92,11 +92,21 @@ class MessageManager {
     }
     
     /**
-     * Adiciona uma mensagem ao histórico e à interface
-     * @param {Object} message - Objeto da mensagem
+     * Adiciona uma mensagem ao histórico
+     * @param {Object} message - A mensagem a ser adicionada
      */
     addMessage(message) {
-        // Adiciona no array de mensagens
+        // Verifica se a mensagem é válida
+        if (!message) {
+            console.warn("Tentativa de adicionar uma mensagem inexistente");
+            return;
+        }
+        
+        // Garante que a mensagem tenha o campo text para compatibilidade
+        if (!message.text && message.content) {
+            message.text = message.content;
+        }
+        
         this.messages.push(message);
         
         // Limita o tamanho do histórico
@@ -104,8 +114,16 @@ class MessageManager {
             this.messages.shift();
         }
         
-        // Exibe a mensagem na interface
-        this.communicationSystem.interfaceManager.displayMessage(message);
+        // Exibe a mensagem na interface, com verificação de segurança
+        if (this.communicationSystem && 
+            this.communicationSystem.interfaceManager && 
+            typeof this.communicationSystem.interfaceManager.displayMessage === 'function') {
+            try {
+                this.communicationSystem.interfaceManager.displayMessage(message);
+            } catch (error) {
+                console.warn("Erro ao exibir mensagem na interface:", error);
+            }
+        }
         
         // Atualiza estatísticas
         this.updateInterfaceStats();
@@ -163,6 +181,7 @@ class MessageManager {
                 isFemale: sender.isFemale === true, // Garante que seja um booleano
                 type: msgType,
                 content: content,
+                text: content, // Adiciona o campo 'text' para compatibilidade
                 time: utils.getFormattedTime()
             };
             
@@ -188,8 +207,16 @@ class MessageManager {
         // Limpa o array de mensagens
         this.messages = [];
         
-        // Limpa a interface do chat
-        this.communicationSystem.interfaceManager.clearMessageDisplay();
+        // Limpa a interface do chat, se disponível
+        if (this.communicationSystem && 
+            this.communicationSystem.interfaceManager && 
+            typeof this.communicationSystem.interfaceManager.clearMessageDisplay === 'function') {
+            try {
+                this.communicationSystem.interfaceManager.clearMessageDisplay();
+            } catch (error) {
+                console.warn("Erro ao limpar a interface de mensagens:", error);
+            }
+        }
         
         // Atualiza estatísticas
         this.updateInterfaceStats();
@@ -199,14 +226,31 @@ class MessageManager {
      * Atualiza as estatísticas na interface
      */
     updateInterfaceStats() {
-        const relationshipManager = this.communicationSystem.relationshipManager;
-        const interfaceManager = this.communicationSystem.interfaceManager;
+        // Verifica se os componentes necessários estão disponíveis
+        if (!this.communicationSystem || 
+            !this.communicationSystem.relationshipManager || 
+            !this.communicationSystem.interfaceManager) {
+            return;
+        }
         
-        const totalMessages = this.messages.length;
-        const friendships = relationshipManager.countRelationships('friendship');
-        const conflicts = relationshipManager.countRelationships('conflict');
-        
-        interfaceManager.updateStats(totalMessages, friendships, conflicts);
+        try {
+            const relationshipManager = this.communicationSystem.relationshipManager;
+            const interfaceManager = this.communicationSystem.interfaceManager;
+            
+            // Verifica se os métodos necessários existem
+            if (typeof relationshipManager.countRelationships !== 'function' ||
+                typeof interfaceManager.updateStats !== 'function') {
+                return;
+            }
+            
+            const totalMessages = this.messages.length;
+            const friendships = relationshipManager.countRelationships('friendship');
+            const conflicts = relationshipManager.countRelationships('conflict');
+            
+            interfaceManager.updateStats(totalMessages, friendships, conflicts);
+        } catch (error) {
+            console.warn("Erro ao atualizar estatísticas:", error);
+        }
     }
     
     /**

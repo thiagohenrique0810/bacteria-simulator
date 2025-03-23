@@ -16,6 +16,7 @@ class EntityManager {
         this.obstacles = [];
         this.predators = [];
         this.effects = [];
+        this.deadBacteria = []; // Lista de bactérias mortas aguardando transformação em comida
         
         // Configurações
         this.populationLimit = 100;
@@ -419,6 +420,122 @@ class EntityManager {
             if (this.effects[i].isDone) {
                 this.effects.splice(i, 1);
             }
+        }
+    }
+
+    /**
+     * Adiciona uma bactéria à lista de bactérias mortas
+     * @param {Bacteria} bacteria - A bactéria que morreu
+     */
+    addDeadBacteria(bacteria) {
+        try {
+            // Verifica se a bactéria é válida
+            if (!bacteria || !bacteria.pos) {
+                console.warn("Tentativa de adicionar bactéria morta inválida");
+                return;
+            }
+            
+            // Adiciona a bactéria à lista de mortas com um temporizador
+            this.deadBacteria.push({
+                pos: bacteria.pos.copy(), // Copia a posição para evitar referências
+                size: bacteria.size || 10,
+                timer: 180, // 3 segundos a 60 FPS
+                nutrition: Math.max(10, Math.round(bacteria.size * 3)) // Comida proporcional ao tamanho
+            });
+            
+            console.log(`Bactéria adicionada à lista de mortas. Total: ${this.deadBacteria.length}`);
+        } catch (error) {
+            console.error("Erro ao adicionar bactéria morta:", error);
+        }
+    }
+    
+    /**
+     * Processa as bactérias mortas, transformando-as em comida após o tempo definido
+     */
+    processDeadBacteria() {
+        // Se não há bactérias mortas, retorna
+        if (this.deadBacteria.length === 0) return;
+        
+        try {
+            // Percorre a lista de trás para frente para remover com segurança
+            for (let i = this.deadBacteria.length - 1; i >= 0; i--) {
+                // Diminui o temporizador
+                this.deadBacteria[i].timer--;
+                
+                // Se o temporizador acabou, transforma em comida
+                if (this.deadBacteria[i].timer <= 0) {
+                    const deadBac = this.deadBacteria[i];
+                    
+                    // Cria nova comida na posição da bactéria morta
+                    this.addFood(
+                        deadBac.pos.x, 
+                        deadBac.pos.y, 
+                        deadBac.nutrition
+                    );
+                    
+                    // Adiciona um efeito visual para indicar a transformação
+                    if (this.simulation.effects) {
+                        const effect = new PopEffect(
+                            deadBac.pos.x, 
+                            deadBac.pos.y, 
+                            "🌱", // Símbolo para indicar transformação em comida
+                            20
+                        );
+                        this.simulation.effects.push(effect);
+                    }
+                    
+                    // Remove da lista de bactérias mortas
+                    this.deadBacteria.splice(i, 1);
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao processar bactérias mortas:", error);
+        }
+    }
+
+    /**
+     * Desenha as bactérias mortas na tela
+     */
+    drawDeadBacteria() {
+        // Se não há bactérias mortas, retorna
+        if (this.deadBacteria.length === 0) return;
+        
+        try {
+            // Configura o estilo de desenho
+            push();
+            noStroke();
+            
+            // Desenha cada bactéria morta
+            for (const deadBac of this.deadBacteria) {
+                // Calcula a transparência baseada no tempo restante
+                // Quanto mais próximo de se transformar em comida, mais transparente fica
+                const alpha = map(deadBac.timer, 0, 180, 50, 200);
+                
+                // Cor cinza esverdeada para indicar decomposição
+                fill(100, 130, 100, alpha);
+                
+                // Desenha o corpo em decomposição
+                circle(deadBac.pos.x, deadBac.pos.y, deadBac.size);
+                
+                // Adiciona um indicador visual do tempo restante (opcional)
+                if (deadBac.timer < 60) { // Mostra apenas no último segundo
+                    // Desenha pequenos pontos verdes ao redor da bactéria
+                    const numDots = map(deadBac.timer, 0, 60, 8, 1);
+                    const radius = deadBac.size * 0.7;
+                    
+                    fill(50, 220, 50, alpha);
+                    for (let i = 0; i < numDots; i++) {
+                        const angle = map(i, 0, numDots, 0, TWO_PI);
+                        const dotX = deadBac.pos.x + cos(angle) * radius;
+                        const dotY = deadBac.pos.y + sin(angle) * radius;
+                        circle(dotX, dotY, 3);
+                    }
+                }
+            }
+            
+            pop();
+        } catch (error) {
+            console.error("Erro ao desenhar bactérias mortas:", error);
         }
     }
 }

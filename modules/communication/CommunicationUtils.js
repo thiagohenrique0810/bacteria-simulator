@@ -12,19 +12,67 @@ class CommunicationUtils {
     }
     
     /**
-     * Obtém um ID único para uma bactéria
+     * Obtém o ID de uma bactéria de forma segura
      * @param {Bacteria} bacteria - Bactéria
-     * @returns {string} - ID único
+     * @returns {string} - ID da bactéria
      */
     getBacteriaId(bacteria) {
-        // Verifica se a bactéria já tem um ID
-        if (!bacteria.communicationId) {
-            // Atribui um ID baseado na posição no array ou gera um ID aleatório
-            const index = this.communicationSystem.simulation.bacteria.indexOf(bacteria);
-            bacteria.communicationId = index >= 0 ? `B${index + 1}` : `B${Math.floor(Math.random() * 10000)}`;
+        if (!bacteria) return "unknown";
+        
+        try {
+            // Tenta obter o ID diretamente
+            if (bacteria.id) {
+                return String(bacteria.id);
+            }
+            
+            // Se não tiver ID, usa a posição como identificador
+            if (bacteria.pos) {
+                return `pos_${Math.round(bacteria.pos.x)}_${Math.round(bacteria.pos.y)}`;
+            }
+        } catch (error) {
+            console.error("Erro ao obter ID da bactéria:", error);
         }
         
-        return bacteria.communicationId;
+        return "unknown";
+    }
+    
+    /**
+     * Calcula a distância entre duas bactérias
+     * @param {Bacteria} b1 - Primeira bactéria
+     * @param {Bacteria} b2 - Segunda bactéria
+     * @returns {number} - Distância calculada
+     */
+    calculateDistance(b1, b2) {
+        if (!b1 || !b2 || !b1.pos || !b2.pos) return Infinity;
+        
+        try {
+            // Usa a função dist do p5.js se disponível
+            if (typeof dist === 'function') {
+                return dist(b1.pos.x, b1.pos.y, b2.pos.x, b2.pos.y);
+            }
+            
+            // Implementação manual como fallback
+            const dx = b1.pos.x - b2.pos.x;
+            const dy = b1.pos.y - b2.pos.y;
+            return Math.sqrt(dx * dx + dy * dy);
+        } catch (error) {
+            console.error("Erro ao calcular distância:", error);
+            return Infinity;
+        }
+    }
+    
+    /**
+     * Obtém um ID único para um par de bactérias
+     * @param {Bacteria} b1 - Primeira bactéria
+     * @param {Bacteria} b2 - Segunda bactéria
+     * @returns {string} - ID único do par
+     */
+    getBacteriaPairId(b1, b2) {
+        const id1 = this.getBacteriaId(b1);
+        const id2 = this.getBacteriaId(b2);
+        
+        // Ordena os IDs para garantir que o par A-B seja igual ao par B-A
+        return [id1, id2].sort().join('-');
     }
     
     /**
@@ -37,22 +85,6 @@ class CommunicationUtils {
         const minutes = now.getMinutes().toString().padStart(2, '0');
         const seconds = now.getSeconds().toString().padStart(2, '0');
         return `${hours}:${minutes}:${seconds}`;
-    }
-    
-    /**
-     * Calcula a distância entre duas bactérias
-     * @param {Bacteria} b1 - Primeira bactéria
-     * @param {Bacteria} b2 - Segunda bactéria
-     * @returns {number} - Distância entre as bactérias
-     */
-    calculateDistance(b1, b2) {
-        // Verifica se as bactérias e suas posições são válidas
-        if (!b1 || !b2 || !b1.pos || !b2.pos || 
-            isNaN(b1.pos.x) || isNaN(b1.pos.y) || 
-            isNaN(b2.pos.x) || isNaN(b2.pos.y)) {
-            return Infinity; // Retorna distância infinita se algo for inválido
-        }
-        return dist(b1.pos.x, b1.pos.y, b2.pos.x, b2.pos.y);
     }
     
     /**
@@ -115,6 +147,22 @@ class CommunicationUtils {
     }
     
     /**
+     * Verifica se um valor está aproximadamente dentro de um intervalo
+     * @param {number} value - Valor a verificar
+     * @param {number} min - Valor mínimo
+     * @param {number} max - Valor máximo
+     * @param {number} tolerance - Tolerância (padrão: 0.1)
+     * @returns {boolean} - Verdadeiro se estiver dentro do intervalo
+     */
+    isWithinRange(value, min, max, tolerance = 0.1) {
+        // Aplica tolerância aos limites
+        const adjustedMin = min - tolerance;
+        const adjustedMax = max + tolerance;
+        
+        return value >= adjustedMin && value <= adjustedMax;
+    }
+    
+    /**
      * Gera uma chance baseada na personalidade da bactéria
      * @param {Bacteria} bacteria - Bactéria
      * @param {string} trait - Característica a considerar ('sociability', 'aggressiveness', etc)
@@ -122,18 +170,53 @@ class CommunicationUtils {
      * @returns {number} - Chance ajustada
      */
     getPersonalityBasedChance(bacteria, trait, baseChance) {
-        // Verifica se os parâmetros são válidos
-        if (!bacteria || !trait || baseChance === undefined || baseChance === null) {
-            return baseChance || 0.01; // Retorna a chance base ou um valor mínimo
+        if (!bacteria || !bacteria.dna || !bacteria.dna.genes) {
+            return baseChance;
         }
         
-        try {
-            const traitValue = bacteria.dna?.genes?.[trait] || 1;
-            return baseChance * traitValue;
-        } catch (error) {
-            console.warn(`Erro ao calcular chance baseada na personalidade (${trait}):`, error);
-            return baseChance || 0.01;
+        const traitValue = bacteria.dna.genes[trait];
+        
+        if (typeof traitValue !== 'number') {
+            return baseChance;
         }
+        
+        // Ajusta a chance com base no traço de personalidade
+        // Valores maiores do traço aumentam a chance
+        return baseChance * (1 + traitValue);
+    }
+    
+    /**
+     * Verifica se uma bactéria está em perigo com base em seu estado
+     * @param {Bacteria} bacteria - Bactéria a ser verificada
+     * @returns {boolean} - Verdadeiro se estiver em perigo
+     */
+    isInDanger(bacteria) {
+        if (!bacteria) return false;
+        
+        try {
+            // Verifica baixa saúde
+            if (bacteria.health < 30) return true;
+            
+            // Verifica energia baixa
+            if (bacteria.energy && bacteria.energy < 20) return true;
+            
+            // Verifica se está em estado de fuga
+            if (bacteria.stateManager && 
+                typeof bacteria.stateManager.getCurrentState === 'function' &&
+                bacteria.stateManager.getCurrentState() === 'fleeing') {
+                return true;
+            }
+            
+            // Verifica se está infectada por doença
+            if (bacteria.isInfected && bacteria.activeDiseases && 
+                bacteria.activeDiseases.size > 0) {
+                return true;
+            }
+        } catch (error) {
+            console.warn("Erro ao verificar perigo:", error);
+        }
+        
+        return false;
     }
 }
 

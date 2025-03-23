@@ -35,7 +35,7 @@ class MovementObstacle {
         }
         
         // Aumenta o alcance de detecção e a força de repulsão para detecção precoce
-        const lookAheadDist = this.lookAhead * (1 + size/20); // Ajusta baseado no tamanho da bactéria
+        const lookAheadDist = this.lookAhead * (1 + size/15); // Ajusta baseado no tamanho da bactéria
         
         // Vetor na direção do movimento
         const ahead = createVector(
@@ -48,6 +48,15 @@ class MovementObstacle {
             this.base.position.x + this.base.velocity.x * lookAheadDist * 0.5,
             this.base.position.y + this.base.velocity.y * lookAheadDist * 0.5
         );
+        
+        // Adiciona um terceiro ponto com um ângulo ligeiramente diferente para melhorar a detecção
+        const aheadAngled = createVector(
+            this.base.velocity.x,
+            this.base.velocity.y
+        );
+        aheadAngled.rotate(PI/6); // 30 graus
+        aheadAngled.mult(lookAheadDist * 0.7);
+        aheadAngled.add(this.base.position);
 
         // Ponto mais próximo
         let nearestObstacle = null;
@@ -60,11 +69,15 @@ class MovementObstacle {
                 continue;
             }
 
-            // Verifica colisão com o ponto à frente (principal ou secundário)
-            const collisionAhead = obstacle.collidesWith(ahead, size/1.5);
-            const collisionAheadHalf = obstacle.collidesWith(aheadHalf, size/1.5);
+            // Verifica colisão com todos os pontos à frente
+            const collisionAhead = obstacle.collidesWith(ahead, size * 1.2);
+            const collisionAheadHalf = obstacle.collidesWith(aheadHalf, size * 1.2);
+            const collisionAheadAngled = obstacle.collidesWith(aheadAngled, size * 1.2);
             
-            if (collisionAhead || collisionAheadHalf) {
+            // Verifica também a colisão com a posição atual para capturar colisões já ocorrendo
+            const collisionCurrent = obstacle.collidesWith(this.base.position, size * 1.2);
+            
+            if (collisionAhead || collisionAheadHalf || collisionAheadAngled || collisionCurrent) {
                 // Calcula distância até o obstáculo
                 const obstacleCenter = createVector(
                     obstacle.x + obstacle.w/2,
@@ -91,15 +104,25 @@ class MovementObstacle {
             escape.normalize();
             
             // Ajusta a força de escape baseado na proximidade
-            const distanceFactor = Math.max(0.5, Math.min(3.0, 3 * (1 - nearestDistance / (lookAheadDist * 2))));
-            escape.mult(this.avoidForce * distanceFactor * 2.5);
+            // Quanto mais próximo, mais forte a repulsão
+            const distanceFactor = Math.max(1.0, Math.min(5.0, 5 * (1 - nearestDistance / (lookAheadDist * 2))));
+            escape.mult(this.avoidForce * distanceFactor * 3.5);
             
             // Aplica a força de fuga
             this.base.applyForce(escape);
             
-            // Se estiver muito próximo, reduz a velocidade
-            if (nearestDistance < size * 2) {
-                this.base.velocity.mult(0.8);
+            // Se estiver muito próximo, reduz drasticamente a velocidade e aplica força adicional
+            if (nearestDistance < size * 2.5) {
+                this.base.velocity.mult(0.5); // Redução mais agressiva
+                
+                // Aplica força adicional perpendicular à direção atual para tentar desviar
+                const perpVector = createVector(-this.base.velocity.y, this.base.velocity.x);
+                perpVector.normalize();
+                perpVector.mult(this.avoidForce * 2);
+                this.base.applyForce(perpVector);
+                
+                // Log para debugging
+                console.log(`Obstáculo muito próximo! Distância: ${nearestDistance.toFixed(2)}, Aplicando força perpendicular`);
             }
             
             return true;
@@ -120,12 +143,18 @@ class MovementObstacle {
             return false;
         }
         
+        let inCollision = false;
+        
         for (let obstacle of obstacles) {
             // Verifica se o obstáculo é uma instância válida
             if (!(obstacle instanceof window.Obstacle)) continue;
             
-            // Verifica colisão direta
-            if (obstacle.collidesWith(this.base.position, size/2)) {
+            // Verificação mais precisa de colisão
+            const colliding = obstacle.collidesWith(this.base.position, size * 0.8);
+            
+            if (colliding) {
+                inCollision = true;
+                
                 // Calcula vetor de saída da colisão
                 const obstacleCenter = createVector(
                     obstacle.x + obstacle.w/2,
@@ -134,14 +163,23 @@ class MovementObstacle {
                 
                 const escapeVector = p5.Vector.sub(this.base.position, obstacleCenter);
                 escapeVector.normalize();
-                escapeVector.mult(this.avoidForce * 2); // Força maior para sair da colisão
                 
+                // Força muito maior para sair da colisão
+                escapeVector.mult(this.avoidForce * 4.0); 
+                
+                // Aplica a força e também move diretamente a posição para garantir saída imediata
                 this.base.applyForce(escapeVector);
-                return true;
+                this.base.position.add(p5.Vector.mult(escapeVector, 0.5));
+                
+                // Para a velocidade atual para evitar entrar mais fundo no obstáculo
+                this.base.velocity.mult(0.2);
+                
+                // Alerta sobre a colisão para debugging
+                console.log(`Colisão direta com obstáculo detectada! Aplicando força de escape.`);
             }
         }
         
-        return false;
+        return inCollision;
     }
 }
 

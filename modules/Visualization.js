@@ -374,29 +374,44 @@ class SimulationVisualization {
     }
 
     /**
-     * Desenha as bactérias
+     * Desenha as bactérias na simulação
      */
     drawBacteria() {
         for (let bacteria of this.simulation.bacteria) {
+            if (!bacteria || !bacteria.pos) {
+                console.warn("Bactéria sem posição detectada, pulando...");
+                continue;  // Pula bactérias sem posição definida
+            }
+            
             push();
             translate(bacteria.pos.x, bacteria.pos.y);
             
             // Verifica se há ângulo válido antes de rotacionar
-            if (typeof bacteria.movement?.angle === 'number') {
+            if (bacteria.movement && typeof bacteria.movement.angle === 'number') {
                 rotate(bacteria.movement.angle);
             }
 
             // Corpo da bactéria
             noStroke();
-            // Usa cor padrão se a cor da bactéria não estiver definida
-            fill(bacteria.color || color(200, 200, 200));
-            ellipse(0, 0, bacteria.size || 20, (bacteria.size || 20) * 0.7);
+            
+            // Usa cor baseada no gênero se a cor da bactéria não estiver definida
+            let bacteriaColor;
+            if (bacteria.color) {
+                bacteriaColor = bacteria.color;
+            } else {
+                bacteriaColor = bacteria.isFemale ? color(255, 150, 200) : color(150, 200, 255);
+            }
+            
+            fill(bacteriaColor);
+            
+            // Define um tamanho padrão se não estiver disponível
+            const size = bacteria.size || 20;
+            ellipse(0, 0, size, size * 0.7);
 
             // Indicador de gênero se ativado
             if (this.simulation.showGender) {
                 stroke(255);
                 strokeWeight(1);
-                const size = bacteria.size || 20;
                 if (bacteria.isFemale) {
                     circle(0, size * 0.4, size * 0.2);
                 } else {
@@ -407,7 +422,6 @@ class SimulationVisualization {
 
             // Barra de energia se ativada
             if (this.simulation.showEnergy) {
-                const size = bacteria.size || 20;
                 const energyWidth = size * 1.2;
                 const energyHeight = 3;
                 const energyY = -size * 0.7;
@@ -418,7 +432,7 @@ class SimulationVisualization {
                 rect(-energyWidth/2, energyY, energyWidth, energyHeight);
                 
                 // Barra de energia
-                const health = bacteria.health || 0;
+                const health = bacteria.health !== undefined ? bacteria.health : 100;
                 const energyLevel = map(health, 0, 100, 0, energyWidth);
                 fill(lerpColor(color(255, 0, 0), color(0, 255, 0), health/100));
                 rect(-energyWidth/2, energyY, energyLevel, energyHeight);

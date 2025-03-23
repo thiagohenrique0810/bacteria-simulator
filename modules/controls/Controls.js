@@ -7,48 +7,50 @@ window.ControlsImpl = class extends ControlsBase {
     /**
      * Inicializa o sistema de controles
      */
-    constructor() {
+    constructor(container) {
         super();
-        this.initialized = false;
-        this.callbacks = {};
+        this.container = container;
+        this.setupControls();
     }
 
     /**
      * Configura os controles
      */
     setupControls() {
-        // Procura o container de predadores para reutilizá-lo
-        this.container = select('#predator-controls-container');
-        
-        // Se não encontrar (improvável), cria um novo
-        if (!this.container) {
-            this.container = createDiv();
-            this.container.id('controls-container');
-            this.container.style('position', 'fixed');
-            this.container.style('top', '0');
-            this.container.style('right', '0');
-            this.container.style('width', '250px');
-            this.container.style('height', '100%');
-            this.container.style('background-color', 'rgba(35, 35, 40, 0.9)');
-            this.container.style('padding', '10px');
-            this.container.style('border-left', '1px solid rgba(60,60,70,0.8)');
-            this.container.style('box-shadow', '-2px 0 10px rgba(0,0,0,0.2)');
-            this.container.style('overflow-y', 'auto');
-            this.container.style('z-index', '1000');
-            this.container.style('display', 'flex');
-            this.container.style('flex-direction', 'column');
-            this.container.style('color', '#e0e0e0');
-            
-            // Adiciona título
-            const title = createDiv('Controles do Simulador');
-            title.parent(this.container);
-            title.style('font-size', '16px');
-            title.style('font-weight', 'bold');
-            title.style('margin-bottom', '15px');
-            title.style('text-align', 'center');
-            title.style('padding-bottom', '5px');
-            title.style('border-bottom', '1px solid rgba(100,100,120,0.5)');
+        // Verifica se já existe um container e remove-o caso exista
+        const existingContainer = select('#controls-container');
+        if (existingContainer) {
+            existingContainer.remove();
         }
+        
+        // Sempre cria um novo container para garantir que tenhamos apenas um
+        this.container = createDiv();
+        this.container.id('controls-container');
+        this.container.style('position', 'fixed');
+        this.container.style('top', '0');
+        this.container.style('right', '0');
+        this.container.style('width', '250px');
+        this.container.style('height', '100%');
+        this.container.style('background-color', 'rgba(35, 35, 40, 0.9)');
+        this.container.style('padding', '10px');
+        this.container.style('border-left', '1px solid rgba(60,60,70,0.8)');
+        this.container.style('box-shadow', '-2px 0 10px rgba(0,0,0,0.2)');
+        this.container.style('overflow-y', 'auto');
+        this.container.style('z-index', '1000');
+        this.container.style('display', 'flex');
+        this.container.style('flex-direction', 'column');
+        this.container.style('color', '#e0e0e0');
+        document.body.appendChild(this.container.elt);
+        
+        // Adiciona título
+        const title = createDiv('Controles do Simulador');
+        title.parent(this.container);
+        title.style('font-size', '16px');
+        title.style('font-weight', 'bold');
+        title.style('margin-bottom', '15px');
+        title.style('text-align', 'center');
+        title.style('padding-bottom', '5px');
+        title.style('border-bottom', '1px solid rgba(100,100,120,0.5)');
 
         // Previne que eventos do mouse se propaguem para o canvas
         this.container.elt.addEventListener('mousedown', e => e.stopPropagation());
@@ -61,6 +63,8 @@ window.ControlsImpl = class extends ControlsBase {
         this.environmentControls = new EnvironmentControls(this.container);
         this.visualizationControls = new VisualizationControls(this.container);
         this.saveControls = new SaveControls(this.container);
+        this.predatorControls = new PredatorControls(this.container);
+        this.diseaseControls = new DiseaseControls(this.container);
 
         // Adiciona estilos comuns a todos os controles
         this.applyCommonStyles();
@@ -137,11 +141,44 @@ window.ControlsImpl = class extends ControlsBase {
     setupEventListeners() {
         if (!this.initialized || !this.callbacks) return;
 
-        // Configura callbacks para cada módulo
-        this.simulationControls?.setupEventListeners(this.callbacks);
-        this.environmentControls?.setupEventListeners(this.callbacks);
-        this.visualizationControls?.setupEventListeners(this.callbacks);
-        this.saveControls?.setupEventListeners(this.callbacks);
+        // Configura callbacks para cada módulo, verificando se cada módulo existe e tem o método
+        if (this.simulationControls && typeof this.simulationControls.setupEventListeners === 'function') {
+            this.simulationControls.setupEventListeners(this.callbacks);
+        }
+        
+        if (this.environmentControls && typeof this.environmentControls.setupEventListeners === 'function') {
+            this.environmentControls.setupEventListeners(this.callbacks);
+        }
+        
+        if (this.visualizationControls && typeof this.visualizationControls.setupEventListeners === 'function') {
+            this.visualizationControls.setupEventListeners(this.callbacks);
+        }
+        
+        if (this.saveControls && typeof this.saveControls.setupEventListeners === 'function') {
+            this.saveControls.setupEventListeners(this.callbacks);
+        }
+        
+        // Verificação para predatorControls
+        if (this.predatorControls && typeof this.predatorControls.setupEventListeners === 'function') {
+            try {
+                this.predatorControls.setupEventListeners(this.callbacks);
+            } catch (error) {
+                console.warn("Não foi possível configurar event listeners para PredatorControls:", error);
+            }
+        }
+        
+        // Verificação extra para diseaseControls que está causando o problema
+        if (this.diseaseControls && typeof this.diseaseControls.setupEventListeners === 'function') {
+            try {
+                this.diseaseControls.setupEventListeners(this.callbacks);
+            } catch (error) {
+                console.warn("Não foi possível configurar event listeners para DiseaseControls:", error);
+            }
+        } else if (this.diseaseControls) {
+            console.warn("DiseaseControls existe mas não tem o método setupEventListeners");
+        } else {
+            console.warn("DiseaseControls não existe");
+        }
     }
 
     /**
@@ -163,12 +200,34 @@ window.ControlsImpl = class extends ControlsBase {
             return {};
         }
 
-        return {
-            ...this.simulationControls?.getState(),
-            ...this.environmentControls?.getState(),
-            ...this.visualizationControls?.getState(),
-            ...this.saveControls?.getState()
-        };
+        let state = {};
+        
+        // Coleta estado de cada controle se existir e tiver o método getState
+        if (this.simulationControls && typeof this.simulationControls.getState === 'function') {
+            state = {...state, ...this.simulationControls.getState()};
+        }
+        
+        if (this.environmentControls && typeof this.environmentControls.getState === 'function') {
+            state = {...state, ...this.environmentControls.getState()};
+        }
+        
+        if (this.visualizationControls && typeof this.visualizationControls.getState === 'function') {
+            state = {...state, ...this.visualizationControls.getState()};
+        }
+        
+        if (this.saveControls && typeof this.saveControls.getState === 'function') {
+            state = {...state, ...this.saveControls.getState()};
+        }
+        
+        if (this.diseaseControls && typeof this.diseaseControls.getState === 'function') {
+            state = {...state, ...this.diseaseControls.getState()};
+        }
+        
+        if (this.predatorControls && typeof this.predatorControls.getState === 'function') {
+            state = {...state, ...this.predatorControls.getState()};
+        }
+        
+        return state;
     }
 
     /**
@@ -177,10 +236,31 @@ window.ControlsImpl = class extends ControlsBase {
     reinitializeSliders() {
         if (!this.initialized) return;
         
-        this.simulationControls?.styleAllSliders();
-        this.environmentControls?.styleAllSliders();
-        this.visualizationControls?.styleAllSliders();
-        this.saveControls?.styleAllSliders();
+        // Verifica se cada controle existe e tem o método styleAllSliders
+        if (this.simulationControls && typeof this.simulationControls.styleAllSliders === 'function') {
+            this.simulationControls.styleAllSliders();
+        }
+        
+        if (this.environmentControls && typeof this.environmentControls.styleAllSliders === 'function') {
+            this.environmentControls.styleAllSliders();
+        }
+        
+        if (this.visualizationControls && typeof this.visualizationControls.styleAllSliders === 'function') {
+            this.visualizationControls.styleAllSliders();
+        }
+        
+        if (this.saveControls && typeof this.saveControls.styleAllSliders === 'function') {
+            this.saveControls.styleAllSliders();
+        }
+        
+        if (this.diseaseControls && typeof this.diseaseControls.styleAllSliders === 'function') {
+            this.diseaseControls.styleAllSliders();
+        }
+        
+        // Verifica se predatorControls existe e tem o método styleAllSliders
+        if (this.predatorControls && typeof this.predatorControls.styleAllSliders === 'function') {
+            this.predatorControls.styleAllSliders();
+        }
         
         console.log('Sliders reinicializados');
     }
@@ -207,4 +287,7 @@ window.ControlsImpl = class extends ControlsBase {
             slider.style('::-ms-thumb', '{width: 16px; height: 16px; background: #4d94ff; border-radius: 50%; cursor: pointer;}');
         });
     }
-}; 
+};
+
+// Define a classe Controls global para usar em Simulation
+window.Controls = window.ControlsImpl; 

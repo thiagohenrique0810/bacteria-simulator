@@ -19,14 +19,18 @@ class PredatorControls {
     initialize() {
         if (this.initialized) return;
         
-        // Cria seção para os predadores
+        // Cria seção para os predadores dentro do container principal
         const section = createDiv();
         section.parent(this.container);
-        section.class('predator-controls-section');
+        section.class('control-section predator-controls-section');
+        section.style('margin-top', '20px');
+        section.style('padding-top', '15px');
+        section.style('border-top', '1px solid rgba(100,120,150,0.3)');
         
-        // Adiciona título da seção
+        // Adiciona título da seção como h3 (subtítulo)
         const title = createElement('h3', 'Controles dos Predadores');
         title.parent(section);
+        title.style('color', '#FF9E80'); // Cor mais alaranjada para predadores
         
         // Checkbox para habilitar reprodução
         this.elements.predatorReproductionCheck = createCheckbox('Permitir Reprodução', true);

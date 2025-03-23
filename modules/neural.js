@@ -110,20 +110,33 @@ class NeuralNetwork {
      * @returns {Array} - Array de outputs
      */
     predict(inputs) {
-        // Camada oculta
-        let hidden = this.weightsIH.map((row, i) => 
-            this.activate(row.reduce((sum, weight, j) => sum + weight * inputs[j], 0) + this.biasH[i][0])
-        );
-
-        // Camada de saída
-        let outputs = this.weightsHO.map((row, i) =>
-            this.activate(row.reduce((sum, weight, j) => sum + weight * hidden[j], 0) + this.biasO[i][0])
-        );
+        // Verificação de segurança para inputs
+        if (!inputs || !Array.isArray(inputs) || inputs.length !== this.inputSize) {
+            console.warn('Neural network received invalid inputs:', inputs);
+            // Retorna um array de saída com valores padrão
+            return Array(this.outputSize).fill(0.5);
+        }
         
-        // Armazena na memória
-        this.storeExperience(inputs, outputs);
+        try {
+            // Camada oculta
+            let hidden = this.weightsIH.map((row, i) => 
+                this.activate(row.reduce((sum, weight, j) => sum + weight * inputs[j], 0) + this.biasH[i][0])
+            );
 
-        return outputs;
+            // Camada de saída
+            let outputs = this.weightsHO.map((row, i) =>
+                this.activate(row.reduce((sum, weight, j) => sum + weight * hidden[j], 0) + this.biasO[i][0])
+            );
+            
+            // Armazena na memória
+            this.storeExperience(inputs, outputs);
+
+            return outputs;
+        } catch (error) {
+            console.error('Error in neural network prediction:', error);
+            // Em caso de erro, retorna um array com valores padrão
+            return Array(this.outputSize).fill(0.5);
+        }
     }
     
     /**

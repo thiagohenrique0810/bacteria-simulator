@@ -9,7 +9,22 @@ class DNA {
      */
     constructor(parentDNA = null, fitness = 1.0) {
         this.generation = parentDNA ? parentDNA.generation + 1 : 1;
-        this.baseLifespan = window.simulation ? window.simulation.controls.lifespanSlider.value() * 3600 * 60 : 12 * 3600 * 60; // 12 horas em frames
+        
+        // Uso seguro de window.simulation para evitar erro undefined
+        let defaultLifespan = 12 * 3600 * 60; // 12 horas em frames (valor padrão)
+        
+        try {
+            // Tenta acessar o controle de forma segura
+            if (window.simulation && 
+                window.simulation.controls && 
+                typeof window.simulation.controls.lifespanSlider?.value === 'function') {
+                defaultLifespan = window.simulation.controls.lifespanSlider.value() * 3600 * 60;
+            }
+        } catch (e) {
+            console.log("Usando valor padrão para baseLifespan", e);
+        }
+        
+        this.baseLifespan = defaultLifespan;
         this.fitness = fitness;
         this.genes = this.initializeGenes(parentDNA);
         this.adaptedToEnvironment = []; // Nichos ecológicos adaptados

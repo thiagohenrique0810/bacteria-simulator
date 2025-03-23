@@ -10,6 +10,7 @@ class Simulation {
         this.saveSystem = new SaveSystem();
         this.randomEvents = new RandomEvents();
         this.controls = new Controls();
+        this.diseaseSystem = new DiseaseSystem(this); // Sistema de doenças
 
         // Configurações
         this.width = 800;
@@ -20,6 +21,7 @@ class Simulation {
         this.showTrails = false;
         this.showEnergy = true;
         this.showGender = true;
+        this.showDiseaseEffects = true; // Nova opção para mostrar efeitos visuais de doenças
         this.populationLimit = 100;
         this.initialEnergy = 150;
         this.foodValue = 50;
@@ -90,7 +92,11 @@ class Simulation {
             foodEaten: 0,
             successfulMates: 0,
             predatorKills: 0,
-            escapes: 0
+            escapes: 0,
+            diseaseCases: 0,       // Total de casos de doenças
+            diseaseDeaths: 0,      // Mortes por doenças
+            immunityAcquired: 0,   // Imunidade adquirida
+            diseaseSpreads: 0      // Total de contágios
         };
     }
 
@@ -100,49 +106,11 @@ class Simulation {
     setupControls() {
         if (!this.controls) return;
 
-        // Cria o container de controles se ainda não existir
-        if (!this.controlsContainer) {
-            this.controlsContainer = createDiv();
-            this.controlsContainer.id('predator-controls-container');
-            this.controlsContainer.style('position', 'fixed');
-            this.controlsContainer.style('top', '0');
-            this.controlsContainer.style('right', '0');
-            this.controlsContainer.style('width', '250px');
-            this.controlsContainer.style('height', '100%');
-            this.controlsContainer.style('background-color', 'rgba(35, 35, 40, 0.9)');
-            this.controlsContainer.style('padding', '10px');
-            this.controlsContainer.style('border-left', '1px solid rgba(60,60,70,0.8)');
-            this.controlsContainer.style('box-shadow', '-2px 0 10px rgba(0,0,0,0.2)');
-            this.controlsContainer.style('overflow-y', 'auto');
-            this.controlsContainer.style('z-index', '1000');
-            this.controlsContainer.style('display', 'flex');
-            this.controlsContainer.style('flex-direction', 'column');
-            this.controlsContainer.style('color', '#e0e0e0');
-            document.body.appendChild(this.controlsContainer.elt);
-            
-            // Adiciona título
-            const title = createDiv('Controles do Simulador');
-            title.parent(this.controlsContainer);
-            title.style('font-size', '16px');
-            title.style('font-weight', 'bold');
-            title.style('margin-bottom', '15px');
-            title.style('text-align', 'center');
-            title.style('padding-bottom', '5px');
-            title.style('border-bottom', '1px solid rgba(100,100,120,0.5)');
-        }
-
-        // Inicializa os controles dos predadores
-        if (!this.predatorControls) {
-            this.predatorControls = new window.PredatorControls(this.controlsContainer);
-            this.predatorControls.setupEventListeners({
-                onChange: (state) => this.updateFromControls()
-            });
-        }
-
+        // Não criar mais o container de controles aqui, deixar para a classe Controls fazer isso
+        
         this.controls.setCallbacks({
             onPauseToggle: (isPaused) => {
                 this.paused = isPaused;
-                console.log('Simulação ' + (isPaused ? 'pausada' : 'continuando'));
             },
             onReset: () => {
                 this.reset();
@@ -288,6 +256,45 @@ class Simulation {
             },
             onChange: (state) => {
                 this.updateFromControls();
+            },
+            onAddBacteria: (count, femaleRatio) => {
+                // Verifica se adicionar essas bactérias excederia o limite
+                const newTotal = this.bacteria.length + Number(count);
+                if (newTotal > this.populationLimit) {
+                    // Mostra um alerta se exceder
+                    alert(`Não é possível adicionar ${count} bactérias. Isso excederia o limite de população (${this.populationLimit}).`);
+                    return;
+                }
+                
+                // Primeira vez que bactérias são adicionadas?
+                const firstTime = this.bacteria.length === 0;
+                
+                // Adiciona as bactérias com a proporção de fêmeas especificada
+                this.addMultipleBacteria(Number(count), Number(femaleRatio));
+                
+                // Notificação de sucesso
+                console.log(`Adicionadas ${count} bactérias (${femaleRatio}% fêmeas)`);
+                
+                // Exibe uma mensagem quando as primeiras bactérias são adicionadas
+                if (firstTime) {
+                    // Cria um elemento de notificação temporário
+                    const notification = createDiv(`Simulação iniciada com ${count} bactérias!`);
+                    notification.position(width/2 - 150, 100);
+                    notification.style('background-color', 'rgba(65, 105, 225, 0.8)');
+                    notification.style('color', 'white');
+                    notification.style('padding', '15px 20px');
+                    notification.style('border-radius', '8px');
+                    notification.style('font-weight', 'bold');
+                    notification.style('z-index', '1000');
+                    notification.style('text-align', 'center');
+                    notification.style('width', '300px');
+                    notification.style('box-shadow', '0 4px 8px rgba(0, 0, 0, 0.3)');
+                    
+                    // Remove a notificação após 5 segundos
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 5000);
+                }
             }
         });
     }
@@ -306,7 +313,7 @@ class Simulation {
         
         // Atualiza configurações com validação
         this.speed = Math.max(0.1, Math.min(5, state.simulationSpeed || 1));
-        this.populationLimit = Math.max(20, Math.min(200, state.populationLimit || 100));
+        this.populationLimit = Math.max(20, Math.min(500, state.populationLimit || 100));
         this.initialEnergy = Math.max(50, Math.min(150, state.initialEnergy || 150));
         this.foodValue = Math.max(10, Math.min(50, state.foodValue || 50));
         this.foodRate = Math.max(0, Math.min(1, state.foodRate || 0.8));
@@ -318,6 +325,7 @@ class Simulation {
         this.showTrails = state.showTrails || false;
         this.showEnergy = state.showEnergy || true;
         this.showGender = state.showGender || true;
+        this.showDiseaseEffects = state.showDiseaseEffects || true;
         this.zoom = Math.max(0.5, Math.min(2, state.zoom || 1));
 
         // Se o número de obstáculos mudou, atualiza
@@ -333,27 +341,33 @@ class Simulation {
         if (oldMaxObstacles !== this.maxObstacles) console.log('Número de obstáculos atualizado:', this.maxObstacles);
 
         // Atualiza os parâmetros dos predadores
-        const predatorState = this.predatorControls.getState();
-        
-        // Atualiza os parâmetros de reprodução dos predadores
-        this.predators.forEach(predator => {
-            predator.canReproduce = predatorState.predatorReproductionEnabled;
-            predator.reproductionEnergyCost = predatorState.predatorReproductionCost;
-            predator.reproductionCooldown = predatorState.predatorReproductionCooldown;
-            predator.minEnergyToReproduce = predatorState.predatorMinEnergy;
-            predator.reproductionRange = predatorState.predatorReproductionRange;
-            predator.mutationRate = predatorState.predatorMutationRate;
-        });
+        if (this.controls && this.controls.predatorControls && typeof this.controls.predatorControls.getState === 'function') {
+            try {
+                const predatorState = this.controls.predatorControls.getState();
+                
+                // Atualiza os parâmetros de reprodução dos predadores
+                this.predators.forEach(predator => {
+                    predator.canReproduce = predatorState.predatorReproductionEnabled;
+                    predator.reproductionEnergyCost = predatorState.predatorReproductionCost;
+                    predator.reproductionCooldown = predatorState.predatorReproductionCooldown;
+                    predator.minEnergyToReproduce = predatorState.predatorMinEnergy;
+                    predator.reproductionRange = predatorState.predatorReproductionRange;
+                    predator.mutationRate = predatorState.predatorMutationRate;
+                });
 
-        // Ajusta a quantidade de predadores com base no limite
-        const predatorLimit = predatorState.predatorLimit;
-        while (this.predators.length > predatorLimit) {
-            this.predators.pop();
-        }
-        while (this.predators.length < predatorLimit) {
-            const x = random(width);
-            const y = random(height);
-            this.predators.push(new Predator(x, y));
+                // Ajusta a quantidade de predadores com base no limite
+                const predatorLimit = predatorState.predatorLimit;
+                while (this.predators.length > predatorLimit) {
+                    this.predators.pop();
+                }
+                while (this.predators.length < predatorLimit) {
+                    const x = random(width);
+                    const y = random(height);
+                    this.predators.push(new Predator(x, y));
+                }
+            } catch (error) {
+                console.warn("Erro ao atualizar parâmetros dos predadores:", error);
+            }
         }
     }
 
@@ -441,128 +455,81 @@ class Simulation {
     update() {
         if (this.paused) return;
 
-        // Atualiza controles e obtém o estado atual
-        this.updateFromControls();
-        const state = this.controls.getState();
+        // Atualiza o tempo interno da simulação
+        this.time += 1 * this.speed;
         
-        // Atualiza ciclo dia/noite
-        this.updateDayNightCycle();
+        // Atualiza o ciclo de dia e noite
+        if (this.dayNightEnabled) {
+            this.updateDayNightCycle();
+        }
 
-        // Calcula o número de atualizações baseado na velocidade
-        const updates = Math.ceil(this.speed); // Número de atualizações por frame
-
-        // Atualiza o grid espacial com entidades
+        // Atualiza o sistema de doenças
+        this.diseaseSystem.update();
+        
+        // Atualiza o grid espacial
         this.updateSpatialGrid();
-
-        // Executa as atualizações
-        for (let u = 0; u < updates; u++) {
-            // Atualiza bactérias
-            for (let i = this.bacteria.length - 1; i >= 0; i--) {
-                const bacteria = this.bacteria[i];
-                
-                // Atualiza valores baseados nos controles com valores mínimos mais favoráveis
-                bacteria.healthLossRate = Math.min(state.healthLossRate || 0.05, 0.1);
-                bacteria.starvationTime = Math.max((state.feedingInterval || 30) * 60, 1800);
-                bacteria.maxEnergy = Math.max(state.initialEnergy || 150, 100);
-                
-                // Busca entidades próximas usando o grid espacial
-                const perceptionRadius = bacteria.perceptionRadius || 150;
-                const nearbyEntities = this.spatialGrid.queryRadius(bacteria.pos, perceptionRadius);
-                
-                // Separa entidades por tipo
-                const nearbyFood = nearbyEntities.filter(e => e instanceof Food);
-                const nearbyPredators = nearbyEntities.filter(e => e instanceof Predator);
-                const nearbyBacteria = nearbyEntities.filter(e => e instanceof Bacteria && e !== bacteria);
-                
-                // Atualiza bactéria com as entidades próximas ao invés de todas as entidades
-                const deltaTime = 1 / (60 * updates);
-                const child = bacteria.update(
-                    nearbyFood, 
-                    nearbyPredators,
-                    this.obstacles,
-                    nearbyBacteria,
-                    deltaTime
-                );
-                
-                // Adiciona efeito do ciclo dia/noite ao comportamento
-                if (this.dayNightEnabled) {
-                    bacteria.isDaytime = this.dayTime;
-                    // Durante a noite, movimento mais lento e menos energia gasta
-                    if (!this.dayTime) {
-                        bacteria.movement.speed *= 0.7;
-                        bacteria.healthLossRate *= 0.8;
-                    }
-                }
-                
-                // Adiciona filho se houver e respeita o limite de população
-                if (child && this.bacteria.length < this.populationLimit) {
-                    child.energy = this.initialEnergy;
-                    this.bacteria.push(child);
-                    this.stats.births++;
-                }
-                
-                // Remove se morta
-                if (bacteria.isDead()) {
-                    this.stats.deaths++;
-                    bacteria.dispose();
-                    this.bacteria.splice(i, 1);
-                }
+        
+        // Gera alimento periodicamente
+        if (this.time % (this.foodSpawnInterval * 60 / this.speed) === 0) {
+            let amount = this.foodSpawnAmount;
+            if (!this.dayTime && this.dayNightEnabled) {
+                amount = Math.floor(amount * 0.3); // Menos comida à noite
             }
+            this.generateFood(amount);
+        }
+        
+        // Remove comida excedente para evitar acúmulo excessivo
+        const maxFood = 300;
+        if (this.food.length > maxFood) {
+            this.food.sort((a, b) => a.creationTime - b.creationTime);
+            this.food.splice(0, this.food.length - maxFood);
+        }
 
-            // Atualiza predadores com otimização similar
-            for (let i = this.predators.length - 1; i >= 0; i--) {
-                const predator = this.predators[i];
-                const perceptionRadius = predator.perceptionRadius || 200;
-                const nearbyEntities = this.spatialGrid.queryRadius(predator.pos, perceptionRadius);
-                
-                const nearbyBacteria = nearbyEntities.filter(e => e instanceof Bacteria);
-                const nearbyObstacles = this.obstacles; // Obstáculos são poucos, manter todos
-                const nearbyPredators = nearbyEntities.filter(e => e instanceof Predator && e !== predator);
-                
-                const deltaTime = 1 / (60 * updates);
-                const child = predator.update(nearbyBacteria, nearbyObstacles, nearbyPredators, deltaTime);
-                
-                // Adiciona novo predador se houver reprodução
-                if (child) {
-                    this.predators.push(child);
+        // Atualiza as bactérias
+        for (let i = this.bacteria.length - 1; i >= 0; i--) {
+            // Se a bactéria morreu, remove da lista
+            if (this.bacteria[i].isDead()) {
+                // Verifica se a morte foi por doença
+                if (this.bacteria[i].isInfected) {
+                    this.stats.diseaseDeaths++;
                 }
-                
-                if (predator.isDead()) {
-                    predator.dispose();
-                    this.predators.splice(i, 1);
-                }
-            }
-
-            // Verifica interações com otimização de colisão
-            this.checkInteractionsOptimized();
-
-            // Gera nova comida com mais frequência
-            if (frameCount % Math.max(1, Math.round(state.foodSpawnInterval * 30 / this.speed)) === 0) {
-                if (random() < this.foodRate) {
-                    this.generateFood(this.foodSpawnAmount);
-                }
+                this.bacteria.splice(i, 1);
+                this.stats.deaths++;
+                continue;
             }
             
-            // Implementa recursos limitados - comida tem tempo de vida e regeneração
-            if (this.food.length > 0) {
-                let maxFood = state.foodLimit || 200;
-                
-                // Remove comida excedente (começa pelas mais antigas)
-                if (this.food.length > maxFood) {
-                    this.food.splice(0, this.food.length - maxFood);
-                }
-                
-                // Comida se regenera lentamente
-                for (let food of this.food) {
-                    if (food.nutrition < 50) {
-                        food.nutrition += 0.01;
-                        food.size = map(food.nutrition, 10, 50, 5, 15);
-                    }
-                }
+            // Atualiza a bactéria baseado na velocidade da simulação
+            for (let s = 0; s < this.speed; s++) {
+                this.bacteria[i].update();
             }
         }
         
-        // Atualiza estatísticas
+        // Atualiza os predadores
+        for (let i = this.predators.length - 1; i >= 0; i--) {
+            if (this.predators[i].isDead()) {
+                this.predators.splice(i, 1);
+                continue;
+            }
+            
+            // Atualiza o predador baseado na velocidade da simulação
+            for (let s = 0; s < this.speed; s++) {
+                this.predators[i].update();
+            }
+        }
+        
+        // Verifica interações (colisões otimizadas)
+        this.checkInteractionsOptimized();
+        
+        // Atualiza os efeitos visuais
+        for (let i = this.effects.length - 1; i >= 0; i--) {
+            this.effects[i].update();
+            
+            if (this.effects[i].isDone) {
+                this.effects.splice(i, 1);
+            }
+        }
+        
+        // Atualiza as estatísticas
         this.updateStats();
     }
     
@@ -717,29 +684,49 @@ class Simulation {
      * Desenha a simulação
      */
     draw() {
-        background(51);
-
-        // Desenha obstáculos
-        for (let obstacle of this.obstacles) {
-            fill(100);
-            noStroke();
-            rect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
+        const state = this.controls ? this.controls.getState() : {};
+        
+        // Desenha os rastros das bactérias (se ativado)
+        if (this.showTrails) {
+            for (let b of this.bacteria) {
+                b.drawTrail();
+            }
         }
-
+        
         // Desenha comida
-        for (let food of this.food) {
-            fill(0, 255, 0);
-            noStroke();
-            circle(food.position.x, food.position.y, 10);
+        for (let f of this.food) {
+            f.draw();
         }
-
+        
+        // Desenha obstáculos
+        for (let o of this.obstacles) {
+            o.draw();
+        }
+        
         // Desenha bactérias
-        for (let bacteria of this.bacteria) {
-            bacteria.draw();
+        for (let b of this.bacteria) {
+            b.draw();
         }
-
+        
+        // Desenha predadores
+        for (let p of this.predators) {
+            p.draw();
+        }
+        
+        // Desenha efeitos visuais
+        for (let e of this.effects) {
+            e.draw();
+        }
+        
+        // Desenha efeitos das doenças
+        if (this.showDiseaseEffects) {
+            this.diseaseSystem.draw();
+        }
+        
         // Desenha estatísticas
-        this.drawStats();
+        if (this.controls && !this.controls.visualizationSettings.hideStats) {
+            this.drawStats();
+        }
     }
 
     /**
@@ -753,7 +740,19 @@ class Simulation {
 
         let y = 20;
         text(`Geração: ${this.stats.generation}`, 10, y); y += 20;
-        text(`Bactérias: ${this.stats.totalBacteria}`, 10, y); y += 20;
+        
+        // Mostra população atual / limite
+        let populationText = `Bactérias: ${this.stats.totalBacteria}/${this.populationLimit}`;
+        
+        // Altera a cor para vermelho se estiver próximo do limite
+        if (this.stats.totalBacteria > this.populationLimit * 0.9) {
+            fill(255, 100, 100);
+            populationText += " (próximo do limite)";
+        }
+        
+        text(populationText, 10, y); y += 20;
+        fill(255); // Restaura a cor original
+        
         text(`Fêmeas: ${this.stats.femaleBacterias}`, 10, y); y += 20;
         text(`Machos: ${this.stats.maleBacterias}`, 10, y); y += 20;
         text(`Grávidas: ${this.stats.pregnantBacterias}`, 10, y); y += 20;
@@ -768,12 +767,106 @@ class Simulation {
      * @param {number} x - Posição X
      * @param {number} y - Posição Y
      * @param {DNA} dna - DNA da bactéria
+     * @param {number} energy - Energia inicial
+     * @returns {Bacteria} - A bactéria criada
      */
-    addBacteria(x, y, dna, energy = this.initialEnergy) {
-        const bacteria = new Bacteria(x, y, dna);
-        bacteria.health = energy;
-        this.bacteria.push(bacteria);
-        return bacteria;
+    addBacteria(x, y, dna = null, energy = this.initialEnergy) {
+        try {
+            // Se não for fornecido DNA, cria um simplificado
+            if (!dna) {
+                dna = {
+                    generation: 1,
+                    baseLifespan: 12 * 3600 * 60,
+                    fitness: 1.0,
+                    genes: {
+                        metabolism: random(0.5, 1.5),
+                        immunity: random(0.5, 1.5),
+                        regeneration: random(0.5, 1.5),
+                        aggressiveness: random(0.5, 1.5),
+                        sociability: random(0.5, 1.5),
+                        curiosity: random(0.5, 1.5),
+                        speed: random(0.5, 1.5),
+                        agility: random(0.5, 1.5),
+                        perception: random(0.5, 1.5),
+                        fertility: random(0.5, 1.5),
+                        mutationRate: random(0.01, 0.1),
+                        adaptability: random(0.5, 1.5),
+                        size: random(0.5, 1.5),
+                        colorR: random(0, 1),
+                        colorG: random(0, 1),
+                        colorB: random(0, 1)
+                    }
+                };
+            }
+            
+            // Cria uma bactéria diretamente sem usar o construtor da classe Bacteria
+            const bacteria = {
+                id: Date.now() + Math.floor(random(0, 1000)),
+                pos: createVector(x, y),
+                size: 20,
+                dna: dna,
+                health: energy,
+                energy: energy,
+                age: 0,
+                lifespan: dna.baseLifespan,
+                lastMealTime: frameCount,
+                healthLossRate: 0.05,
+                starvationTime: 30 * 60 * 60,
+                isFemale: random() > 0.5,
+                simulation: this,
+                isInfected: false,
+                activeDiseases: new Set(),
+                immuneMemory: new Set(),
+                canReproduce: true,
+                state: window.BacteriaStates.EXPLORING,
+                movement: {
+                    pos: createVector(x, y),
+                    velocity: createVector(random(-1, 1), random(-1, 1)),
+                    acceleration: createVector(0, 0),
+                    maxSpeed: 2 * dna.genes.speed,
+                    baseMaxSpeed: 2 * dna.genes.speed,
+                    maxForce: 0.1,
+                    avoidRadius: 25,
+                    update: function() {
+                        // Comportamento básico de movimento
+                        this.velocity.add(this.acceleration);
+                        this.velocity.limit(this.maxSpeed);
+                        this.pos.add(this.velocity);
+                        this.acceleration.mult(0);
+                    }
+                },
+                isDead: function() { 
+                    // Lógica simplificada para verificar morte
+                    return this.health <= 0 || this.age >= this.lifespan; 
+                },
+                draw: function() {
+                    // Renderização simplificada
+                    push();
+                    fill(this.isFemale ? color(255, 150, 200) : color(150, 200, 255));
+                    noStroke();
+                    ellipse(this.pos.x, this.pos.y, this.size, this.size);
+                    pop();
+                },
+                update: function() {
+                    // Atualização simplificada
+                    this.age++;
+                    this.health -= this.healthLossRate;
+                    this.movement.update();
+                    // Manter dentro dos limites da tela
+                    this.pos.x = constrain(this.pos.x, 0, width);
+                    this.pos.y = constrain(this.pos.y, 0, height);
+                }
+            };
+            
+            bacteria.pos = bacteria.movement.pos; // Sincronizar referências
+            
+            bacteria.simulation = this; // Define referência à simulação
+            this.bacteria.push(bacteria);
+            return bacteria;
+        } catch (error) {
+            console.error("Erro ao adicionar bactéria:", error);
+            return null;
+        }
     }
 
     /**
@@ -860,15 +953,10 @@ class Simulation {
      * Inicializa a simulação
      */
     setup() {
-        // Adiciona bactérias iniciais com mais energia
-        for (let i = 0; i < 20; i++) {
-            this.addBacteria(
-                random(this.width),
-                random(this.height),
-                new DNA(),
-                this.initialEnergy
-            );
-        }
+        const state = this.controls ? this.controls.getState() : {};
+        
+        // Inicializa sem bactérias - o usuário as adicionará depois
+        // this.addMultipleBacteria(initialBacteriaCount, femaleRatio);
 
         // Adiciona mais comida inicial
         for (let i = 0; i < 80; i++) { // Aumentado de 50 para 80
@@ -903,20 +991,17 @@ class Simulation {
         this.effects = [];
 
         const state = this.controls.getState();
-
-        // Cria bactérias iniciais
-        for (let i = 0; i < 20; i++) {
-            this.bacteria.push(new Bacteria(
-                random(this.width),
-                random(this.height),
-                new DNA(),
-                state.initialEnergy
-            ));
-        }
+        
+        // Não cria bactérias iniciais - o usuário as adicionará depois
+        // const initialBacteriaCount = state.initialBacteria || 20;
+        // const femaleRatio = state.femaleRatio !== undefined ? state.femaleRatio : 50;
+        // this.addMultipleBacteria(initialBacteriaCount, femaleRatio);
 
         // Cria predadores iniciais
         for (let i = 0; i < 2; i++) { // Começa com 2 predadores
-            this.predators.push(new Predator(random(this.width), random(height)));
+            const predator = new Predator(random(this.width), random(height));
+            predator.simulation = this;
+            this.predators.push(predator);
         }
 
         // Cria comida inicial
@@ -964,6 +1049,82 @@ class Simulation {
      */
     addEffect(effect) {
         this.effects.push(effect);
+    }
+
+    /**
+     * Adiciona múltiplas bactérias à simulação
+     * @param {number} count - Número de bactérias para adicionar
+     * @param {number} femaleRatio - Porcentagem de fêmeas (0-100)
+     */
+    addMultipleBacteria(count, femaleRatio) {
+        console.log("Método addMultipleBacteria chamado:", {count, femaleRatio});
+        
+        // Garante valores válidos
+        count = Math.max(1, Math.min(100, count));
+        femaleRatio = Math.max(0, Math.min(100, femaleRatio));
+        
+        console.log("Valores ajustados:", {count, femaleRatio});
+        
+        // Número de fêmeas a serem criadas
+        const femaleCount = Math.round(count * (femaleRatio / 100));
+        console.log("Número de fêmeas a criar:", femaleCount);
+        
+        // Tamanho do array de bactérias antes
+        const beforeCount = this.bacteria.length;
+        console.log("Bactérias antes:", beforeCount);
+        
+        try {
+            // Adiciona as bactérias
+            for (let i = 0; i < count; i++) {
+                // Determina se esta bactéria será fêmea
+                const isFemale = i < femaleCount;
+                
+                try {
+                    // Posição aleatória na tela
+                    const x = random(width * 0.8) + width * 0.1; // Evita bordas
+                    const y = random(height * 0.8) + height * 0.1; // Evita bordas
+                    
+                    // Cria uma instância real de Bacteria
+                    const bacteria = new Bacteria(x, y, null, this.initialEnergy);
+                    
+                    // Define o gênero
+                    bacteria.isFemale = isFemale;
+                    
+                    // IMPORTANTE: Define a referência à simulação
+                    bacteria.simulation = this;
+                    
+                    // Configura valores iniciais críticos para evitar morte prematura
+                    bacteria.health = this.initialEnergy;
+                    bacteria.energy = this.initialEnergy;
+                    bacteria.age = 0;
+                    bacteria.lastMealTime = frameCount;
+                    
+                    // Define a cor com base no gênero (propriedade necessária para visualização)
+                    bacteria.color = isFemale ? color(255, 150, 200) : color(150, 200, 255);
+                    
+                    // Verifica se o tamanho está definido
+                    if (!bacteria.size) {
+                        bacteria.size = 20;
+                    }
+                    
+                    // Adiciona à simulação
+                    this.bacteria.push(bacteria);
+                    
+                    console.log(`Bactéria ${i+1}/${count} criada (${isFemale ? 'fêmea' : 'macho'})`);
+                } catch (error) {
+                    console.error(`Erro ao criar bactéria ${i+1}/${count}:`, error);
+                    console.error(error.stack);
+                }
+            }
+            
+            // Tamanho do array de bactérias depois
+            const afterCount = this.bacteria.length;
+            console.log("Bactérias depois:", afterCount);
+            console.log("Bactérias adicionadas:", afterCount - beforeCount);
+        } catch (error) {
+            console.error("Erro ao adicionar bactérias:", error);
+            console.error(error.stack);
+        }
     }
 }
 

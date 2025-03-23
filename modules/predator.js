@@ -46,40 +46,57 @@ class Predator extends Bacteria {
      * @param {Array} bacteria - Lista de bactérias para caçar
      * @param {Array} obstacles - Lista de obstáculos
      * @param {Array} predators - Lista de outros predadores
+     * @param {number} deltaTime - Tempo desde o último frame
+     * @returns {Predator|null} - Novo predador se reproduzir
      */
-    update(bacteria, obstacles, predators = []) {
-        super.updateHealth();
-        
-        // Encontra a presa mais próxima
-        const prey = this.findClosestPrey(bacteria);
-        
-        // Procura parceiro para reprodução
-        const partner = this.findReproductionPartner(predators);
-        
-        // Atualiza estado baseado nas condições
-        const stateActions = this.state.update({
-            bacteria,
-            predators,
-            canReproduce: this.canReproduce && 
-                         this.states.getEnergy() >= this.minEnergyToReproduce && 
-                         millis() - this.lastReproductionTime >= this.reproductionCooldown,
-            partnerNearby: partner !== null
-        });
+    update(bacteria, obstacles, predators = [], deltaTime = 1) {
+        try {
+            // Atualiza idade
+            this.age += deltaTime;
 
-        // Atualiza movimento baseado no estado
-        this.updateMovement(stateActions, obstacles, prey, partner);
+            // Verifica se está morto
+            if (this.isDead()) {
+                return null;
+            }
 
-        // Tenta atacar se houver presa próxima
-        if (prey && this.canAttack()) {
-            this.attack(prey);
+            // Atualiza saúde
+            this.health -= this.healthLossRate * deltaTime;
+            this.health = constrain(this.health, 0, 100);
+            
+            // Encontra a presa mais próxima
+            const prey = this.findClosestPrey(bacteria);
+            
+            // Procura parceiro para reprodução
+            const partner = this.findReproductionPartner(predators);
+            
+            // Atualiza estado baseado nas condições
+            const stateActions = this.state.update({
+                bacteria,
+                predators,
+                canReproduce: this.canReproduce && 
+                            this.states.getEnergy() >= this.minEnergyToReproduce && 
+                            millis() - this.lastReproductionTime >= this.reproductionCooldown,
+                partnerNearby: partner !== null
+            });
+
+            // Atualiza movimento baseado no estado
+            this.updateMovement(stateActions, obstacles, prey, partner);
+
+            // Tenta atacar se houver presa próxima
+            if (prey && this.canAttack()) {
+                this.attack(prey);
+            }
+
+            // Tenta reproduzir se houver parceiro próximo
+            if (partner && this.canReproduce && this.canReproduceNow()) {
+                return this.reproduce(partner);
+            }
+
+            return null;
+        } catch (error) {
+            console.error("Erro no update do Predator:", error);
+            return null;
         }
-
-        // Tenta reproduzir se houver parceiro próximo
-        if (partner && this.canReproduce && this.canReproduceNow()) {
-            return this.reproduce(partner);
-        }
-
-        return null;
     }
 
     /**

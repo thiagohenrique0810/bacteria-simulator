@@ -74,6 +74,7 @@ class Predator extends Bacteria {
                 bacteria,
                 predators,
                 canReproduce: this.canReproduce && 
+                            this.states && typeof this.states.getEnergy === 'function' &&
                             this.states.getEnergy() >= this.minEnergyToReproduce && 
                             millis() - this.lastReproductionTime >= this.reproductionCooldown,
                 partnerNearby: partner !== null
@@ -104,8 +105,15 @@ class Predator extends Bacteria {
      * @returns {boolean} - Se pode se reproduzir
      */
     canReproduceNow() {
-        return this.states.getEnergy() >= this.minEnergyToReproduce &&
-               millis() - this.lastReproductionTime > this.reproductionCooldown;
+        try {
+            return this.states && 
+                   typeof this.states.getEnergy === 'function' &&
+                   this.states.getEnergy() >= this.minEnergyToReproduce &&
+                   millis() - this.lastReproductionTime > this.reproductionCooldown;
+        } catch (error) {
+            console.warn("Erro ao verificar se pode reproduzir:", error);
+            return false;
+        }
     }
 
     /**
@@ -114,19 +122,42 @@ class Predator extends Bacteria {
      * @returns {Predator|null} - Parceiro encontrado ou null
      */
     findReproductionPartner(predators) {
-        if (!this.canReproduce || 
-            this.states.getEnergy() < this.minEnergyToReproduce || 
-            millis() - this.lastReproductionTime < this.reproductionCooldown) {
+        try {
+            // Verifica se pode se reproduzir e se o states existe
+            if (!this.canReproduce || 
+                !this.states || 
+                typeof this.states.getEnergy !== 'function' ||
+                this.states.getEnergy() < this.minEnergyToReproduce || 
+                millis() - this.lastReproductionTime < this.reproductionCooldown) {
+                return null;
+            }
+            
+            // Verifica se predators é um array válido
+            if (!predators || !Array.isArray(predators)) {
+                return null;
+            }
+
+            // Encontra um parceiro compatível
+            return predators.find(predator => {
+                // Verifica se o predador é válido e tem os atributos necessários
+                return predator && 
+                    predator !== this && 
+                    predator.canReproduce &&
+                    predator.states && 
+                    typeof predator.states.getEnergy === 'function' &&
+                    predator.states.getEnergy() >= predator.minEnergyToReproduce &&
+                    predator.lastReproductionTime !== undefined &&
+                    predator.reproductionCooldown !== undefined &&
+                    millis() - predator.lastReproductionTime >= predator.reproductionCooldown &&
+                    predator.pos &&
+                    !isNaN(predator.pos.x) && 
+                    !isNaN(predator.pos.y) &&
+                    dist(this.pos.x, this.pos.y, predator.pos.x, predator.pos.y) <= this.reproductionRange;
+            });
+        } catch (error) {
+            console.error("Erro ao procurar parceiro para reprodução:", error);
             return null;
         }
-
-        return predators.find(predator => 
-            predator !== this && 
-            predator.canReproduce &&
-            predator.states.getEnergy() >= predator.minEnergyToReproduce &&
-            millis() - predator.lastReproductionTime >= predator.reproductionCooldown &&
-            dist(this.pos.x, this.pos.y, predator.pos.x, predator.pos.y) <= this.reproductionRange
-        );
     }
 
     /**
@@ -179,20 +210,33 @@ class Predator extends Bacteria {
      * @returns {Bacteria|null} - Bactéria mais próxima ou null
      */
     findClosestPrey(bacteria) {
-        let closest = null;
-        let minDist = this.huntingRange;
+        try {
+            // Verifica se bacteria é um array válido
+            if (!bacteria || !Array.isArray(bacteria) || bacteria.length === 0) {
+                return null;
+            }
 
-        for (let b of bacteria) {
-            if (!b.isPredator) { // Não ataca outros predadores
-                const d = dist(this.pos.x, this.pos.y, b.pos.x, b.pos.y);
-                if (d < minDist) {
-                    minDist = d;
-                    closest = b;
+            let closest = null;
+            let minDist = this.huntingRange;
+
+            for (let b of bacteria) {
+                if (b && !b.isPredator && b.pos && 
+                    !isNaN(b.pos.x) && !isNaN(b.pos.y) && 
+                    !isNaN(this.pos.x) && !isNaN(this.pos.y)) { 
+                    // Não ataca outros predadores e valida posições
+                    const d = dist(this.pos.x, this.pos.y, b.pos.x, b.pos.y);
+                    if (d < minDist) {
+                        minDist = d;
+                        closest = b;
+                    }
                 }
             }
-        }
 
-        return closest;
+            return closest;
+        } catch (error) {
+            console.error("Erro ao encontrar presa mais próxima:", error);
+            return null;
+        }
     }
 
     /**
@@ -208,18 +252,38 @@ class Predator extends Bacteria {
      * @param {Bacteria} prey - Bactéria alvo
      */
     attack(prey) {
-        const d = dist(this.pos.x, this.pos.y, prey.pos.x, prey.pos.y);
-        
-        if (d < this.size + prey.size) {
-            prey.health -= this.attackDamage;
-            this.health += this.attackDamage * 0.5; // Recupera parte da saúde
-            this.states.addEnergy(10); // Ganha energia ao atacar
-            this.lastAttackTime = millis();
-            
-            // Efeito visual do ataque
-            if (window.simulation) {
-                window.simulation.addEffect(new AttackEffect(prey.pos.x, prey.pos.y));
+        try {
+            // Verifica se a presa é válida
+            if (!prey || !prey.pos || !this.pos || 
+                isNaN(prey.pos.x) || isNaN(prey.pos.y) || 
+                isNaN(this.pos.x) || isNaN(this.pos.y)) {
+                return;
             }
+            
+            const d = dist(this.pos.x, this.pos.y, prey.pos.x, prey.pos.y);
+            
+            if (d < this.size + prey.size) {
+                prey.health -= this.attackDamage;
+                this.health += this.attackDamage * 0.5; // Recupera parte da saúde
+                
+                // Validação antes de acessar states
+                if (this.states && typeof this.states.addEnergy === 'function') {
+                    this.states.addEnergy(10); // Ganha energia ao atacar
+                }
+                
+                this.lastAttackTime = millis();
+                
+                // Efeito visual do ataque
+                if (window.simulation && typeof window.simulation.addEffect === 'function') {
+                    try {
+                        window.simulation.addEffect(new AttackEffect(prey.pos.x, prey.pos.y));
+                    } catch (effectError) {
+                        console.warn("Erro ao adicionar efeito de ataque:", effectError);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao atacar presa:", error);
         }
     }
 

@@ -13,7 +13,6 @@ class BacteriaCommunication {
         this.maxMessages = 50;            // Número máximo de mensagens no histórico
         this.relationships = new Map();   // Mapa de relacionamentos entre bactérias
         this.communicationRange = 100;    // Distância máxima para comunicação direta
-        this.chatInterface = null;        // Referência ao elemento HTML do chat
         this.randomMessageChance = 0.003; // Chance de enviar mensagem aleatória por frame (ajustado pela social)
         this.userCanChat = true;          // Se o usuário pode enviar mensagens
         
@@ -30,153 +29,82 @@ class BacteriaCommunication {
             USER: 'user'                  // Mensagem do usuário
         };
         
-        // Cria interface de chat
-        this.createChatInterface();
+        // Inicializa os elementos da interface
+        this.initializeInterface();
     }
 
     /**
-     * Cria a interface de chat no lado esquerdo da tela
+     * Inicializa a interface de chat usando os elementos HTML existentes
      */
-    createChatInterface() {
-        // Cria o container principal
-        this.chatInterface = createDiv();
-        this.chatInterface.id('bacteria-chat');
-        this.chatInterface.position(0, 0);
-        this.chatInterface.style('width', '250px');
-        this.chatInterface.style('height', '100%');
-        this.chatInterface.style('position', 'fixed');
-        this.chatInterface.style('left', '0');
-        this.chatInterface.style('top', '0');
-        this.chatInterface.style('background-color', 'rgba(35, 35, 40, 0.9)');
-        this.chatInterface.style('color', '#e0e0e0');
-        this.chatInterface.style('padding', '10px');
-        this.chatInterface.style('box-sizing', 'border-box');
-        this.chatInterface.style('display', 'flex');
-        this.chatInterface.style('flex-direction', 'column');
-        this.chatInterface.style('z-index', '1000');
-        this.chatInterface.style('border-right', '1px solid rgba(60,60,70,0.8)');
-        this.chatInterface.style('box-shadow', '2px 0 10px rgba(0,0,0,0.2)');
-        this.chatInterface.style('overflow', 'hidden');
+    initializeInterface() {
+        // Referências para os elementos HTML existentes
+        this.chatInterface = document.getElementById('chat-container');
+        this.messagesContainer = document.getElementById('chat-messages');
+        this.userMessageInput = document.getElementById('chat-input');
         
-        // Título do chat
-        const title = createDiv('Comunicação das Bactérias');
-        title.parent(this.chatInterface);
-        title.style('font-size', '16px');
-        title.style('font-weight', 'bold');
-        title.style('text-align', 'center');
-        title.style('margin-bottom', '10px');
-        title.style('padding-bottom', '10px');
-        title.style('border-bottom', '1px solid rgba(100,100,120,0.5)');
+        // Habilita o campo de entrada
+        if (this.userMessageInput) {
+            this.userMessageInput.removeAttribute('disabled');
+            this.userMessageInput.setAttribute('placeholder', 'Digite sua mensagem...');
+        }
         
-        // Container das mensagens com scroll
-        this.messagesContainer = createDiv();
-        this.messagesContainer.parent(this.chatInterface);
-        this.messagesContainer.style('flex-grow', '1');
-        this.messagesContainer.style('overflow-y', 'auto');
-        this.messagesContainer.style('padding-right', '5px');
-        this.messagesContainer.style('margin-bottom', '10px');
-        this.messagesContainer.style('font-size', '12px');
+        // Configura os botões existentes
+        const sendButton = document.querySelector('.enviar-btn') || document.getElementById('send-chat-btn');
+        const clearButton = document.querySelector('.limpar-btn') || document.getElementById('clear-chat-btn');
         
-        // Interface para o usuário enviar mensagens
-        this.createUserInputInterface();
+        // Se os botões não existirem, usamos os elementos que já estão no DOM
+        if (sendButton) {
+            this.sendButton = sendButton;
+            this.sendButton.addEventListener('click', () => this.sendUserMessage());
+        }
         
-        // Estatísticas de comunicação
-        this.statsContainer = createDiv();
-        this.statsContainer.parent(this.chatInterface);
-        this.statsContainer.style('padding', '10px');
-        this.statsContainer.style('background-color', 'rgba(40, 40, 50, 0.7)');
-        this.statsContainer.style('border-radius', '4px');
-        this.statsContainer.style('font-size', '11px');
-        this.statsContainer.style('margin-top', 'auto');
-        this.statsContainer.html('Estatísticas de Comunicação<br>Total de mensagens: 0<br>Amizades formadas: 0<br>Conflitos: 0');
-    }
-    
-    /**
-     * Cria a interface para o usuário enviar mensagens
-     */
-    createUserInputInterface() {
-        // Container para os controles de chat do usuário
-        const userChatContainer = createDiv();
-        userChatContainer.parent(this.chatInterface);
-        userChatContainer.style('margin-bottom', '10px');
-        userChatContainer.style('background-color', 'rgba(45, 45, 55, 0.7)');
-        userChatContainer.style('border-radius', '4px');
-        userChatContainer.style('padding', '10px');
-        
-        // Título da seção
-        const userChatTitle = createDiv('Conversar com Bactérias');
-        userChatTitle.parent(userChatContainer);
-        userChatTitle.style('font-size', '14px');
-        userChatTitle.style('font-weight', 'bold');
-        userChatTitle.style('margin-bottom', '8px');
-        userChatTitle.style('color', '#8cb4ff');
-        
-        // Campo de texto
-        this.userMessageInput = createInput('');
-        this.userMessageInput.parent(userChatContainer);
-        this.userMessageInput.attribute('placeholder', 'Digite sua mensagem...');
-        this.userMessageInput.style('width', '100%');
-        this.userMessageInput.style('padding', '6px 8px');
-        this.userMessageInput.style('margin-bottom', '8px');
-        this.userMessageInput.style('border-radius', '4px');
-        this.userMessageInput.style('border', '1px solid rgba(80, 80, 100, 0.4)');
-        this.userMessageInput.style('background-color', 'rgba(55, 55, 65, 0.9)');
-        this.userMessageInput.style('color', '#e0e0e0');
-        this.userMessageInput.style('font-size', '12px');
-        
-        // Container para botões
-        const buttonsContainer = createDiv();
-        buttonsContainer.parent(userChatContainer);
-        buttonsContainer.style('display', 'flex');
-        buttonsContainer.style('gap', '8px');
-        
-        // Botão de enviar
-        this.sendButton = createButton('Enviar');
-        this.sendButton.parent(buttonsContainer);
-        this.sendButton.style('flex', '1');
-        this.sendButton.style('padding', '5px 10px');
-        this.sendButton.style('background-color', '#4d94ff');
-        this.sendButton.style('border', 'none');
-        this.sendButton.style('border-radius', '4px');
-        this.sendButton.style('color', 'white');
-        this.sendButton.style('cursor', 'pointer');
-        this.sendButton.style('font-size', '12px');
-        this.sendButton.style('transition', 'background-color 0.3s');
-        this.sendButton.mouseOver(() => this.sendButton.style('background-color', '#3a7fcf'));
-        this.sendButton.mouseOut(() => this.sendButton.style('background-color', '#4d94ff'));
-        
-        // Botão para limpar o chat
-        this.clearButton = createButton('Limpar Chat');
-        this.clearButton.parent(buttonsContainer);
-        this.clearButton.style('flex', '1');
-        this.clearButton.style('padding', '5px 10px');
-        this.clearButton.style('background-color', '#ff6b6b');
-        this.clearButton.style('border', 'none');
-        this.clearButton.style('border-radius', '4px');
-        this.clearButton.style('color', 'white');
-        this.clearButton.style('cursor', 'pointer');
-        this.clearButton.style('font-size', '12px');
-        this.clearButton.style('transition', 'background-color 0.3s');
-        this.clearButton.mouseOver(() => this.clearButton.style('background-color', '#e55c5c'));
-        this.clearButton.mouseOut(() => this.clearButton.style('background-color', '#ff6b6b'));
-        
-        // Event listeners
-        this.sendButton.mousePressed(() => this.sendUserMessage());
-        this.clearButton.mousePressed(() => this.clearChat());
+        if (clearButton) {
+            this.clearButton = clearButton;
+            this.clearButton.addEventListener('click', () => this.clearChat());
+        }
         
         // Permite enviar com a tecla Enter
-        this.userMessageInput.elt.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.sendUserMessage();
+        if (this.userMessageInput) {
+            this.userMessageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.sendUserMessage();
+                }
+            });
+        }
+        
+        // Adiciona estatísticas ao container existente
+        const statsElement = document.createElement('div');
+        statsElement.id = 'chat-stats';
+        statsElement.className = 'estatisticas-de-comunicacao';
+        statsElement.style.fontSize = '11px';
+        statsElement.style.padding = '10px';
+        statsElement.style.backgroundColor = 'rgba(40, 40, 50, 0.7)';
+        statsElement.style.borderRadius = '4px';
+        statsElement.style.marginTop = '10px';
+        
+        if (this.chatInterface) {
+            const existingStats = document.getElementById('chat-stats');
+            if (!existingStats) {
+                this.chatInterface.appendChild(statsElement);
+                this.statsContainer = statsElement;
+                this.statsContainer.innerHTML = 'Estatísticas de Comunicação<br>Total de mensagens: 0<br>Amizades formadas: 0<br>Conflitos: 0';
+            } else {
+                this.statsContainer = existingStats;
             }
-        });
+        }
     }
     
     /**
      * Envia a mensagem do usuário para as bactérias
      */
     sendUserMessage() {
-        const message = this.userMessageInput.value().trim();
+        // Verifica se temos o elemento de input
+        if (!this.userMessageInput) {
+            console.error("Elemento de input não encontrado");
+            return;
+        }
+        
+        const message = this.userMessageInput.value.trim();
         
         if (message && this.simulation.bacteria.length > 0) {
             // Seleciona uma bactéria aleatória para receber a mensagem
@@ -196,7 +124,7 @@ class BacteriaCommunication {
             this.addMessage(userMessage);
             
             // Limpa o campo de texto
-            this.userMessageInput.value('');
+            this.userMessageInput.value = '';
             
             // Programa uma resposta da bactéria
             this.scheduleResponse(targetBacteria);
@@ -299,92 +227,101 @@ class BacteriaCommunication {
      * Limpa todas as mensagens do chat
      */
     clearChat() {
-        // Solicita confirmação
-        if (confirm('Tem certeza que deseja limpar todas as mensagens do chat?')) {
+        if (this.messagesContainer) {
+            // Preserva apenas a mensagem do sistema inicial
+            const systemMessage = this.messagesContainer.querySelector('.message.system');
+            this.messagesContainer.innerHTML = '';
+            
+            if (systemMessage) {
+                this.messagesContainer.appendChild(systemMessage);
+            }
+            
+            // Limpa o array de mensagens
             this.messages = [];
+            
+            // Atualiza estatísticas
             this.updateChatInterface();
-            console.log('Chat de bactérias limpo');
         }
     }
-
+    
     /**
-     * Atualiza a interface do chat com as mensagens mais recentes
+     * Atualiza a interface do chat
      */
     updateChatInterface() {
-        // Limpa o container de mensagens
-        this.messagesContainer.html('');
+        // Atualiza estatísticas se existir o container
+        if (this.statsContainer) {
+            const totalMessages = this.messages.length;
+            const friendships = this.countRelationships('friendship');
+            const conflicts = this.countRelationships('conflict');
+            
+            this.statsContainer.innerHTML = `
+                <div>Total de mensagens: <strong>${totalMessages}</strong></div>
+                <div>Amizades formadas: <strong>${friendships}</strong></div>
+                <div>Conflitos: <strong>${conflicts}</strong></div>
+            `;
+        }
+    }
+    
+    /**
+     * Adiciona uma mensagem ao histórico e à interface
+     * @param {Object} message - Objeto da mensagem
+     */
+    addMessage(message) {
+        // Adiciona no array de mensagens
+        this.messages.push(message);
         
-        // Adiciona cada mensagem ao container
-        for (let i = this.messages.length - 1; i >= 0; i--) {
-            const msg = this.messages[i];
-            
-            // Cria o elemento da mensagem
-            const msgElement = createDiv();
-            msgElement.parent(this.messagesContainer);
-            msgElement.style('margin-bottom', '8px');
-            msgElement.style('padding', '6px 8px');
-            msgElement.style('border-radius', '4px');
-            msgElement.style('font-size', '12px');
-            msgElement.style('line-height', '1.3');
-            
-            // Cores baseadas no tipo de mensagem
-            const colors = {
-                [this.messageTypes.GREETING]: 'rgba(70, 130, 180, 0.3)',
-                [this.messageTypes.FOOD_INFO]: 'rgba(46, 139, 87, 0.3)',
-                [this.messageTypes.DANGER_WARNING]: 'rgba(178, 34, 34, 0.3)',
-                [this.messageTypes.HELP_REQUEST]: 'rgba(218, 165, 32, 0.3)',
-                [this.messageTypes.FRIENDSHIP]: 'rgba(147, 112, 219, 0.3)',
-                [this.messageTypes.AGGRESSIVE]: 'rgba(139, 0, 0, 0.3)',
-                [this.messageTypes.MATING]: 'rgba(255, 105, 180, 0.3)',
-                [this.messageTypes.RANDOM]: 'rgba(80, 80, 80, 0.3)',
-                [this.messageTypes.USER]: 'rgba(0, 128, 255, 0.3)'
-            };
-            
-            msgElement.style('background-color', colors[msg.type] || 'rgba(80, 80, 80, 0.3)');
-            
-            // Nome/ID formatado
-            let senderName;
-            let senderHTML;
-            
-            if (msg.senderId === 'USER') {
-                senderName = 'Você';
-                senderHTML = `<span style="color: #00aaff; font-weight: bold;">${senderName}</span>`;
-            } else {
-                senderName = `Bact-${msg.senderId.toString().padStart(3, '0')}`;
-                senderHTML = msg.isFemale ? 
-                    `<span style="color: #ff9ccf;">${senderName}</span>` : 
-                    `<span style="color: #9ccfff;">${senderName}</span>`;
-            }
-            
-            // Receptor formatado
-            let receiverName;
-            let receiverHTML;
-            
-            if (msg.receiverId === 'USER') {
-                receiverName = 'Você';
-                receiverHTML = `<span style="color: #00aaff; font-weight: bold;">${receiverName}</span>`;
-            } else {
-                receiverName = `Bact-${msg.receiverId.toString().padStart(3, '0')}`;
-                receiverHTML = `<span style="color: #aaaaaa;">${receiverName}</span>`;
-            }
-            
-            // Timestamp
-            const timeHTML = `<span style="color: #777777; font-size: 10px;">${msg.time}</span>`;
-            
-            // Conteúdo completo
-            msgElement.html(`${timeHTML} ${senderHTML} → ${receiverHTML}: ${msg.content}`);
+        // Limita o tamanho do histórico
+        if (this.messages.length > this.maxMessages) {
+            this.messages.shift();
         }
         
-        // Atualiza as estatísticas
-        const friendships = this.countRelationships('friend');
-        const conflicts = this.countRelationships('enemy');
+        // Adiciona à interface se existir
+        if (this.messagesContainer) {
+            // Cria o elemento da mensagem
+            const messageElement = document.createElement('div');
+            
+            // Define a classe apropriada
+            let messageClass = 'message';
+            if (message.senderId === 'USER') {
+                messageClass += ' user';
+            } else if (message.type === this.messageTypes.DANGER_WARNING) {
+                messageClass += ' predator';
+            } else {
+                messageClass += ' bacteria';
+            }
+            
+            messageElement.className = messageClass;
+            
+            // Define o conteúdo
+            const sender = message.senderId === 'USER' ? 'Você' : `Bactéria #${message.senderId.substring(0, 4)}`;
+            const receiver = message.receiverId === 'USER' ? 'você' : `Bactéria #${message.receiverId.substring(0, 4)}`;
+            
+            let content = '';
+            if (message.senderId === 'USER') {
+                content = `${message.content}`;
+            } else if (message.receiverId === 'USER') {
+                content = `${message.content}`;
+            } else {
+                content = `${message.content}`;
+            }
+            
+            messageElement.textContent = content;
+            
+            // Adiciona ao container
+            this.messagesContainer.appendChild(messageElement);
+            
+            // Scroll para a última mensagem
+            this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        }
         
-        this.statsContainer.html(
-            `Estatísticas de Comunicação<br>` +
-            `Total de mensagens: ${this.messages.length}<br>` +
-            `Amizades formadas: ${friendships}<br>` +
-            `Conflitos: ${conflicts}`
-        );
+        // Usa a função global se disponível
+        if (typeof window.addMessage === 'function') {
+            const messageType = message.senderId === 'USER' ? 'user' : (message.type === this.messageTypes.DANGER_WARNING ? 'predator' : 'bacteria');
+            window.addMessage(message.content, messageType);
+        }
+        
+        // Atualiza estatísticas
+        this.updateChatInterface();
     }
 
     /**
@@ -635,19 +572,6 @@ class BacteriaCommunication {
     getRandomDirection() {
         const directions = ['norte', 'sul', 'leste', 'oeste'];
         return random(directions);
-    }
-
-    /**
-     * Adiciona uma mensagem ao histórico
-     * @param {Object} message - Mensagem a ser adicionada
-     */
-    addMessage(message) {
-        this.messages.push(message);
-        
-        // Limita o número de mensagens
-        if (this.messages.length > this.maxMessages) {
-            this.messages.shift();
-        }
     }
 
     /**

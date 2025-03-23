@@ -39,10 +39,12 @@ Este projeto simula um ecossistema complexo onde bactérias virtuais podem se mo
   - Ações disponíveis: explorar, buscar comida, buscar parceiro, descansar
 
 - **Sistema Neural**:
-  - Implementação de rede neural para tomada de decisões
+  - Implementação modular de rede neural para tomada de decisões
+  - Componentes separados para funções de ativação, memória e evolução
   - Inputs normalizados incluindo saúde, energia, proximidade de comida/parceiros/predadores
   - Sistema híbrido permitindo alternar entre Q-Learning e Rede Neural
-  - Capacidade de evolução através de gerações
+  - Capacidade de evolução através de gerações com crossover de múltiplos pontos
+  - Mutações adaptativas baseadas em fitness
 
 ### Interações Sociais
 - **Sistema Social Avançado**:
@@ -91,6 +93,7 @@ Este projeto simula um ecossistema complexo onde bactérias virtuais podem se mo
 - **Mouse**:
   - Clique em uma bactéria para ver suas informações
   - Arraste para movimentar a visualização
+  - Clique em área vazia para adicionar comida
 
 - **Teclado**:
   - `Espaço`: Pausar/Continuar simulação
@@ -112,45 +115,112 @@ bacterias/
 │   │   ├── BacteriaBase.js  # Classe base de bactérias
 │   │   ├── Environment.js   # Interação com ambiente
 │   │   ├── Learning.js      # Sistema de aprendizado
-│   │   ├── Movement.js      # Sistema de movimento
+│   │   ├── Movement.js      # Sistema de movimento específico de bactérias
 │   │   ├── Social.js        # Interações sociais
-│   │   └── Visualization.js # Representação visual
+│   │   ├── Visualization.js # Representação visual
+│   │   └── index.js         # Integração dos componentes de bactéria
 │   ├── controls/            # Módulos de interface
-│   │   ├── Controls.js      # Controles básicos
 │   │   ├── ControlsBase.js  # Classe base de controles
 │   │   ├── DiseaseControls.js # Controles de doenças
 │   │   ├── EnvironmentControls.js # Controles de ambiente
 │   │   ├── PredatorControls.js # Controles de predadores
 │   │   ├── SaveControls.js  # Controles de salvamento
 │   │   ├── SimulationControls.js # Controles de simulação
-│   │   └── VisualizationControls.js # Controles visuais
-│   ├── attackEffect.js      # Sistema de efeitos de ataque
-│   ├── bacteria.js          # Integração de bactérias
+│   │   ├── VisualizationControls.js # Controles visuais
+│   │   └── Controls.js      # Integração dos controles
+│   ├── movement/            # Sistema de movimento modularizado
+│   │   ├── MovementBase.js  # Classe base com funcionalidades essenciais
+│   │   ├── MovementSteering.js # Comportamentos de direcionamento
+│   │   ├── MovementObstacle.js # Lógica de desvio de obstáculos
+│   │   └── index.js         # Integração dos componentes de movimento
+│   ├── neural/              # Sistema neural modularizado
+│   │   ├── ActivationFunctions.js # Funções de ativação
+│   │   ├── Memory.js        # Sistema de memória de experiências
+│   │   ├── Evolution.js     # Sistema de evolução (crossover, mutação)
+│   │   ├── NeuralNetwork.js # Classe principal da rede neural
+│   │   └── index.js         # Integração dos componentes neurais
+│   ├── simulation/          # Sistema de simulação modularizado
+│   │   ├── EntityManager.js # Gerenciamento de entidades
+│   │   ├── StatsManager.js  # Gerenciamento de estatísticas
+│   │   ├── EnvironmentSystem.js # Sistema de ambiente
+│   │   ├── RenderSystem.js  # Sistema de renderização
+│   │   ├── InteractionSystem.js # Sistema de interações
+│   │   ├── SimulationControlSystem.js # Sistema de controles
+│   │   ├── Simulation.js    # Classe principal da simulação
+│   │   └── index.js         # Integração dos componentes de simulação
+│   ├── bacteria.js          # Adaptador de bactérias (compatibilidade)
 │   ├── bacteriaStates.js    # Máquina de estados
 │   ├── behavior.js          # Sistema de comportamento
 │   ├── communication.js     # Sistema de comunicação
 │   ├── constants.js         # Constantes globais
-│   ├── controls.js          # Interface de controle
 │   ├── disease.js           # Sistema de doenças
 │   ├── dna.js               # Sistema genético
 │   ├── events.js            # Sistema de eventos
 │   ├── fix.js               # Correções e ajustes
 │   ├── food.js              # Sistema de alimentação
-│   ├── movement.js          # Sistema de movimento
-│   ├── neural.js            # Rede neural
+│   ├── init.js              # Inicialização
+│   ├── neural.js            # Adaptador neural (compatibilidade)
 │   ├── obstacle.js          # Sistema de obstáculos
 │   ├── predator.js          # Sistema de predadores
 │   ├── predatorStates.js    # Estados dos predadores
-│   ├── randomEvents.js      # Sistema de eventos aleatórios
 │   ├── reproduction.js      # Sistema reprodutivo
 │   ├── save.js              # Sistema de salvamento
-│   ├── saveSystem.js        # Gerenciamento de salvamentos
-│   ├── simulation.js        # Núcleo da simulação
+│   ├── simulation.js        # Adaptador da simulação (compatibilidade)
 │   ├── utils.js             # Funções utilitárias
 │   └── visualization.js     # Sistema visual
-├── food.js                  # Classe Food
 └── favicon.ico              # Ícone do site
 ```
+
+## Otimizações e Melhorias Recentes
+
+### Refatoração do Sistema de Movimento
+- **Arquitetura Modular**: Sistema de movimento dividido em componentes especializados
+  - `MovementBase.js`: Gerencia a física básica de movimento (posição, velocidade, aceleração)
+  - `MovementSteering.js`: Implementa comportamentos de direcionamento (busca, separação)
+  - `MovementObstacle.js`: Gerencia detecção e desvio de obstáculos
+- **Classe MovementBase**: Funcionalidades essenciais de movimento
+  - Gestão de vetores de posição e velocidade
+  - Aplicação de forças físicas
+  - Limites de velocidade adaptados à idade
+- **Classe MovementSteering**: Comportamentos avançados de direcionamento
+  - Algoritmos para busca de alvos
+  - Comportamento de separação para evitar aglomerações
+  - Movimentos aleatórios e seguimento de campos de fluxo
+- **Classe MovementObstacle**: Sistema de desvio de colisões
+  - Detecção antecipada de obstáculos
+  - Cálculo de rotas de desvio
+  - Resposta a colisões diretas
+- **Melhor Performance**: Otimização de cálculos de física e colisões
+- **Fácil Extensibilidade**: Novos comportamentos podem ser adicionados sem modificar o núcleo
+- **Retrocompatibilidade**: Interface pública preservada para manter compatibilidade com código existente
+
+### Refatoração do Sistema Neural
+- **Arquitetura Modular**: Sistema neural dividido em componentes especializados para facilitar manutenção
+- **Separação de Responsabilidades**: Cada módulo com função específica (ativação, memória, evolução)
+- **Classe ActivationFunctions**: Funções de ativação (sigmoid, ReLU, LeakyReLU, tanh) disponíveis como métodos estáticos
+- **Classe NeuralMemory**: Sistema otimizado para armazenamento e recuperação de experiências
+- **Classe NeuralEvolution**: Algoritmos de crossover e mutação separados da lógica principal
+- **Retrocompatibilidade**: Interfaces públicas preservadas para manter compatibilidade com código existente
+
+### Refatoração do Sistema de Simulação
+- **Arquitetura Modular**: Sistema de simulação dividido em componentes especializados
+- **Padrão de Responsabilidade Única**: Cada módulo com responsabilidade bem definida
+- **Camada de Compatibilidade**: Adaptadores para manter compatibilidade com código legado
+- **Eliminação de Duplicidades**: Remoção de arquivos redundantes e código duplicado
+
+### Módulos Especializados
+- **EntityManager**: Gerencia todas as entidades da simulação (bactérias, comida, obstáculos, predadores)
+- **StatsManager**: Controla e atualiza estatísticas do ecossistema
+- **EnvironmentSystem**: Gerencia condições ambientais e geração de recursos
+- **RenderSystem**: Sistema otimizado de renderização
+- **InteractionSystem**: Detecta e processa interações entre entidades
+- **SimulationControlSystem**: Integração com controles de usuário
+
+### Otimizações de Desempenho
+- **Particionamento Espacial**: Sistema de grade para otimizar detecção de colisões
+- **Gerenciamento de Memória**: Remoção eficiente de entidades
+- **Renderização Eficiente**: Técnicas para manter FPS estável mesmo com centenas de entidades
+- **Processamento por Lotes**: Agrupamento de operações similares para melhor performance
 
 ## Dependências
 
@@ -186,22 +256,13 @@ bacterias/
 - Certifique-se de que as portas escolhidas (8000 ou 8080) não estejam em uso
 - O servidor Node.js oferece recursos adicionais como CORS, Cache e Listagem de Diretórios
 
-## Recursos Técnicos
-
-### Otimizações
-- **Particionamento Espacial**: Sistema de grade para otimizar detecção de colisões
-- **Gerenciamento de Memória**: Remoção de entidades quando fora do campo de visão
-- **Renderização Eficiente**: Técnicas de otimização para manter FPS estável com centenas de entidades
-
-### Lógica Avançada
-- **Máquina de Estados Finitos**: Gerenciamento de comportamentos através de estados e transições
-- **Sistema de Eventos**: Arquitetura baseada em eventos para comunicação entre sistemas
-- **Modularização**: Código altamente modularizado para facilitar manutenção e expansão
-
 ## Funcionalidades em Desenvolvimento
 - **Evolução de Espécies**: Surgimento de novas espécies de bactérias por deriva genética
 - **Ecossistema Expandido**: Novos tipos de entidades e interações ambientais
 - **Interface Web Avançada**: Dashboard com gráficos e análises estatísticas
+- **Adaptação Dinâmica**: Algoritmos melhorados para adaptação das entidades ao ambiente
+- **Ecossistemas Temáticos**: Ambientes especializados com regras e dinâmicas próprias
+- **Sistema Neural Avançado**: Novos tipos de redes neurais e algoritmos de aprendizado
 
 ## Contribuindo
 

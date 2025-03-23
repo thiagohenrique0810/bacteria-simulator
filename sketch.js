@@ -19,14 +19,14 @@ function setup() {
     const simulationWidth = totalWidth - controlsWidth - chatWidth;
     const simulationHeight = windowHeight;
     
-    // Cria o canvas com o tamanho ajustado e posicionado após o chat
-    createCanvas(simulationWidth, simulationHeight);
-    // Posiciona o canvas após o painel de chat
-    document.querySelector('canvas').style.marginLeft = chatWidth + 'px';
+    // Cria o canvas com o tamanho ajustado e o adiciona ao container de simulação
+    const canvas = createCanvas(simulationWidth, simulationHeight);
+    canvas.parent('simulation-container');
     
     // Botão temporário para adicionar bactérias diretamente
     const emergencyButton = createButton('ADICIONAR 10 BACTÉRIAS (EMERGÊNCIA)');
-    emergencyButton.position(chatWidth + 20, 20);
+    emergencyButton.parent('simulation-container');
+    emergencyButton.position(20, 20);
     emergencyButton.style('z-index', '10000');
     emergencyButton.style('background-color', 'red');
     emergencyButton.style('color', 'white');
@@ -314,9 +314,6 @@ function windowResized() {
     
     // Redimensiona o canvas
     resizeCanvas(simulationWidth, simulationHeight);
-    
-    // Reposiciona o canvas
-    document.querySelector('canvas').style.marginLeft = chatWidth + 'px';
     
     // Atualiza as dimensões da simulação
     if (simulation) {

@@ -45,195 +45,113 @@ class BacteriaMovement {
     }
 
     /**
-     * Faz a bactéria se mover em uma direção aleatória com movimento natural
+     * Move a bactéria em uma direção aleatória com comportamento realista
      * @param {number} deltaTime - Tempo desde o último frame
-     * @param {number} speedModifier - Modificador de velocidade (opcional)
+     * @param {number} speedFactor - Multiplicador de velocidade
      */
-    moveRandom(deltaTime = 1, speedModifier = 1.0) {
+    moveRandom(deltaTime = 1, speedFactor = 1.0) {
         try {
-            // Verifica se o movimento foi inicializado corretamente
-            if (!this.movement || !this.movement.velocity) {
-                console.warn("Sistema de movimento não inicializado corretamente");
-                return;
+            // SOLUÇÃO RADICAL: Força o movimento independente de quaisquer sistemas
+            console.log(`Movimento radical aplicado à bactéria ${this.bacteria.id}`);
+            
+            // Garante que a bactéria tem uma posição válida
+            if (!this.bacteria.pos) {
+                console.error("Bactéria sem posição. Criando posição...");
+                this.bacteria.pos = createVector(random(width), random(height));
             }
             
-            // Verifica se a posição da bactéria é válida
-            if (this.bacteria && (isNaN(this.bacteria.pos.x) || isNaN(this.bacteria.pos.y))) {
-                console.warn("Posição da bactéria inválida (NaN). Corrigindo...");
-                this.bacteria.pos.x = isNaN(this.bacteria.pos.x) ? random(width) : this.bacteria.pos.x;
-                this.bacteria.pos.y = isNaN(this.bacteria.pos.y) ? random(height) : this.bacteria.pos.y;
+            // Mantém um ângulo de movimento consistente, mas com variações aleatórias
+            if (!this._movementAngle) {
+                this._movementAngle = random(TWO_PI);
+                this._changeDirectionCounter = 0;
+            }
+            
+            // Ocasionalmente muda a direção para tornar o movimento mais interessante
+            this._changeDirectionCounter += deltaTime;
+            if (this._changeDirectionCounter > 60) { // Muda a cada segundo (60 frames)
+                this._movementAngle += random(-PI/4, PI/4); // Varia até 45 graus
+                this._changeDirectionCounter = 0;
                 
-                // Sincroniza a posição do sistema de movimento
-                if (this.movement && this.movement.position) {
-                    this.movement.position.x = this.bacteria.pos.x;
-                    this.movement.position.y = this.bacteria.pos.y;
+                // Chance pequena de mudar completamente de direção
+                if (random() < 0.1) {
+                    this._movementAngle = random(TWO_PI);
                 }
             }
             
-            // Incrementa o temporizador de wandering
-            this.wanderTimer++;
+            // Ajusta a velocidade com base no tipo de bactéria
+            let speed = 2.0 * speedFactor; // Velocidade base
             
-            // Recupera as dimensões do mundo
-            const worldWidth = typeof width !== 'undefined' ? width : 800;
-            const worldHeight = typeof height !== 'undefined' ? height : 600;
-            
-            // Detecta se está em um canto ou perto da borda
-            const margin = this.bacteria.size * 5;
-            const isNearLeftEdge = this.bacteria.pos.x < margin;
-            const isNearRightEdge = this.bacteria.pos.x > worldWidth - margin;
-            const isNearTopEdge = this.bacteria.pos.y < margin;
-            const isNearBottomEdge = this.bacteria.pos.y > worldHeight - margin;
-            
-            const isInCorner = (isNearLeftEdge && isNearTopEdge) || 
-                               (isNearLeftEdge && isNearBottomEdge) || 
-                               (isNearRightEdge && isNearTopEdge) || 
-                               (isNearRightEdge && isNearBottomEdge);
-                               
-            const isNearEdge = isNearLeftEdge || isNearRightEdge || isNearTopEdge || isNearBottomEdge;
-            
-            // Verifica se há informação de "preso no canto" do sistema de aprendizado
-            let isStuck = false;
-            let stuckBehavior = false;
-            
-            // Verifica se a bactéria tem um sistema de aprendizado que indica que está presa
-            if (this.bacteria && this.bacteria.learning && 
-                this.bacteria.learning.movementParams && 
-                this.bacteria.learning.movementParams.isStuck) {
-                isStuck = true;
-                stuckBehavior = true;
-            }
-            
-            // Comportamento especial quando está presa em um canto (prioridade máxima)
-            if (stuckBehavior) {
-                // Direciona fortemente para o centro com alta velocidade e aleatoriedade
-                const centerDirection = createVector(
-                    worldWidth/2 - this.bacteria.pos.x,
-                    worldHeight/2 - this.bacteria.pos.y
-                );
-                
-                // Normaliza o vetor (com segurança para evitar erros)
-                if (centerDirection.mag() > 0) {
-                    centerDirection.normalize();
-                    
-                    // Adiciona forte componente aleatório para aumentar chances de sair do canto
-                    const randomAngle = random(-PI/2, PI/2);
-                    centerDirection.rotate(randomAngle);
-                    
-                    // Aplica velocidade aumentada
-                    const escapeSpeed = 2.0; // Velocidade muito alta para sair do canto
-                    
-                    // Usar código seguro para aplicar multiplicação
-                    if (!isNaN(speedModifier) && !isNaN(escapeSpeed) && 
-                        isFinite(speedModifier) && isFinite(escapeSpeed)) {
-                        centerDirection.mult(speedModifier * escapeSpeed);
-                    } else {
-                        // Em caso de erro, usa valores seguros
-                        centerDirection.mult(1.5);
-                    }
-                    
-                    // Aplica a direção
-                    this.movement.setDirection(centerDirection);
-                    
-                    // Reseta o temporizador de wandering
-                    this.wanderTimer = 0;
-                    this.wanderInterval = random(10, 20); // Intervalo muito curto para mudanças rápidas
+            // Se tiver informação de tipo de bactéria, ajusta velocidade
+            if (this.bacteria.visualization && this.bacteria.visualization.bacteriaType !== undefined) {
+                const bacteriaType = this.bacteria.visualization.bacteriaType;
+                switch (bacteriaType) {
+                    case 0: // Bacilo - mais rápido
+                        speed = 2.5 * speedFactor;
+                        break;
+                    case 1: // Coco - mais lento
+                        speed = 1.5 * speedFactor;
+                        break;
+                    case 2: // Espirilo - movimento rápido
+                        speed = 3.0 * speedFactor;
+                        // Adiciona movimento em espiral
+                        this._movementAngle += sin(frameCount * 0.05) * 0.1;
+                        break;
+                    case 3: // Vibrião - movimento variável
+                        // Ocasionalmente acelera
+                        speed = (frameCount % 120 < 20) ? 3.0 * speedFactor : 2.0 * speedFactor;
+                        break;
                 }
             }
-            // Comportamento para quando está em um canto ou perto da borda, mas não "preso"
-            else if ((isInCorner && random() < 0.4) || (isNearEdge && random() < 0.25)) {
-                // Vetor direcionado ao centro, mas com menor probabilidade de ativação
-                // para permitir exploração dos cantos
-                const centerDirection = createVector(
-                    worldWidth/2 - this.bacteria.pos.x,
-                    worldHeight/2 - this.bacteria.pos.y
-                );
-                
-                // Normaliza com segurança
-                if (centerDirection.mag() > 0) {
-                    centerDirection.normalize();
-                    
-                    // Adiciona uma variação aleatória para evitar movimento direto e previsível
-                    centerDirection.rotate(random(-PI/3, PI/3));
-                    
-                    // Velocidade moderada para sair da borda
-                    const escapeSpeed = isInCorner ? 1.2 : 1.1;
-                    
-                    // Usa código seguro para multiplicação
-                    if (!isNaN(speedModifier) && !isNaN(escapeSpeed) && 
-                        isFinite(speedModifier) && isFinite(escapeSpeed)) {
-                        centerDirection.mult(speedModifier * escapeSpeed);
-                    } else {
-                        // Em caso de erro, usa valores seguros
-                        centerDirection.mult(1.0);
-                    }
-                    
-                    // Aplica a direção
-                    this.movement.setDirection(centerDirection);
-                    
-                    // Atualiza o ângulo de wandering para manter consistência
-                    this.wanderAngle = Math.atan2(centerDirection.y, centerDirection.x);
-                    
-                    // Redefine o intervalo para mudança mais frequente quando estiver perto das bordas
-                    this.wanderTimer = 0;
-                    this.wanderInterval = random(20, 40);
-                }
-            } 
-            // Movimento de wandering normal
-            else if (this.wanderTimer >= this.wanderInterval) {
-                // Reseta o temporizador com uma pequena variação
-                this.wanderTimer = 0;
-                this.wanderInterval = random(30, 60);
-                
-                // Comportamento de exploração normal
-                // Altera o ângulo de wandering para um movimento mais natural
-                // Permite maior aleatoriedade quando não está em canto
-                this.wanderAngle += random(-0.8, 0.8);
+            
+            // Cria um vetor de movimento direto com base no ângulo e na velocidade
+            const moveX = cos(this._movementAngle) * speed * deltaTime;
+            const moveY = sin(this._movementAngle) * speed * deltaTime;
+            
+            // Aplica o movimento DIRETAMENTE à posição da bactéria
+            this.bacteria.pos.x += moveX;
+            this.bacteria.pos.y += moveY;
+            
+            // Garante que a bactéria não saia da tela
+            const margin = this.bacteria.size || 20;
+            const worldWidth = width || 800;
+            const worldHeight = height || 600;
+            
+            // Limites da tela com rebote
+            if (this.bacteria.pos.x < margin) {
+                this.bacteria.pos.x = margin;
+                this._movementAngle = PI - this._movementAngle; // Rebote horizontal
+            } else if (this.bacteria.pos.x > worldWidth - margin) {
+                this.bacteria.pos.x = worldWidth - margin;
+                this._movementAngle = PI - this._movementAngle; // Rebote horizontal
             }
             
-            // Cria um vetor de direção com base no ângulo atual
-            const wanderDirection = createVector(cos(this.wanderAngle), sin(this.wanderAngle));
-            
-            // Ajusta a velocidade com base na posição e na idade
-            let finalSpeedMultiplier = speedModifier;
-            
-            // Bactérias mais jovens têm um pouco mais de energia para explorar
-            const ageModifier = this.bacteria && typeof this.bacteria.age === 'number' && 
-                                typeof this.bacteria.lifespan === 'number' && this.bacteria.lifespan > 0 ?
-                                1.0 - (this.bacteria.age / this.bacteria.lifespan) * 0.3 : 1.0;
-            
-            // Validação de valores numéricos
-            if (!isNaN(ageModifier) && isFinite(ageModifier)) {
-                finalSpeedMultiplier *= ageModifier;
+            if (this.bacteria.pos.y < margin) {
+                this.bacteria.pos.y = margin;
+                this._movementAngle = TWO_PI - this._movementAngle; // Rebote vertical
+            } else if (this.bacteria.pos.y > worldHeight - margin) {
+                this.bacteria.pos.y = worldHeight - margin;
+                this._movementAngle = TWO_PI - this._movementAngle; // Rebote vertical
             }
             
-            // Aplica a velocidade final com validação para evitar NaN
-            if (!isNaN(finalSpeedMultiplier) && isFinite(finalSpeedMultiplier)) {
-                wanderDirection.mult(finalSpeedMultiplier * 0.8);
-            } else {
-                // Em caso de erro, usa um valor seguro
-                wanderDirection.mult(0.5);
+            // Sincroniza a posição do sistema de movimento (se existir)
+            if (this.movement && this.movement.position) {
+                this.movement.position.x = this.bacteria.pos.x;
+                this.movement.position.y = this.bacteria.pos.y;
             }
             
-            // Aplica a direção como força de steering
-            this.movement.setDirection(wanderDirection);
+            // Log de movimento a cada 60 frames para não sobrecarregar o console
+            if (frameCount % 60 === 0) {
+                console.log(`Bactéria ${this.bacteria.id} se movendo: (${this.bacteria.pos.x.toFixed(1)}, ${this.bacteria.pos.y.toFixed(1)}), velocidade: ${speed.toFixed(1)}`);
+            }
             
-            // Atualiza o movimento com os parâmetros necessários
-            const ageRatio = this.bacteria && typeof this.bacteria.age === 'number' && 
-                             typeof this.bacteria.lifespan === 'number' && this.bacteria.lifespan > 0 ?
-                             this.bacteria.age / this.bacteria.lifespan : 0.5;
-            
-            const obstacles = this.bacteria.environment?.obstacles || [];
-            const size = this.bacteria.size || 10;
-            const isResting = this.bacteria.stateManager?.currentState === 'resting';
-            
-            // Atualiza o movimento, agora usando a interface correta
-            this.movement.update(ageRatio, obstacles, size, true, isResting);
-            
-            // Sincroniza a posição da bactéria com o sistema de movimento
-            this.bacteria.pos.x = this.movement.position.x;
-            this.bacteria.pos.y = this.movement.position.y;
         } catch (error) {
-            console.error("Erro ao mover aleatoriamente:", error);
+            console.error("Erro fatal em moveRandom:", error);
+            
+            // Último recurso: movimento aleatório simples
+            if (this.bacteria && this.bacteria.pos) {
+                const randomStep = p5.Vector.random2D().mult(3);
+                this.bacteria.pos.add(randomStep);
+            }
         }
     }
 
@@ -245,70 +163,123 @@ class BacteriaMovement {
      */
     moveTowards(target, deltaTime, speedMultiplier = 1.0) {
         // Verifica se target é válido
-        if (!target || !target.x || !target.y) return;
+        if (!target) {
+            console.warn("Target inválido em moveTowards, usando movimento aleatório");
+            this.moveRandom(deltaTime, speedMultiplier);
+            return;
+        }
         
         try {
-            // Valores padrão
-            deltaTime = deltaTime || 1;
+            // SOLUÇÃO RADICAL: aplica movimento direto e simples em direção ao alvo
+            console.log(`Movimento direcionado radical para bactéria ${this.bacteria.id}`);
             
-            // Cria um vetor do ponto atual para o alvo
-            const desiredDirection = p5.Vector.sub(target, this.bacteria.pos);
-            
-            // Calcula a distância ao alvo
-            const distanceToTarget = desiredDirection.mag();
-            
-            // Normaliza o vetor de direção
-            desiredDirection.normalize();
-            
-            // Aplica o multiplicador de velocidade baseado na proximidade ao alvo (desacelera ao se aproximar)
-            const arrivalFactor = map(
-                constrain(distanceToTarget, 0, 100), 
-                0, 100, 
-                0.3, 1.0
-            ); // Desacelera ao se aproximar do alvo
-            
-            // Incorpora o gene de velocidade se disponível
-            let finalSpeed = speedMultiplier * arrivalFactor;
-            if (this.bacteria && this.bacteria.dna && this.bacteria.dna.genes) {
-                const geneSpeed = this.bacteria.dna.genes.speed || 1;
-                finalSpeed *= geneSpeed;
+            // Garante que temos posição válida para a bactéria
+            if (!this.bacteria.pos) {
+                console.error("Bactéria sem posição em moveTowards. Criando posição...");
+                this.bacteria.pos = createVector(random(width), random(height));
             }
             
-            // Aplica a velocidade à direção
-            desiredDirection.mult(finalSpeed);
+            // Obtém valores X e Y do target (suporta diferentes formatos)
+            const targetX = target.x !== undefined ? target.x : 
+                           (target.pos ? target.pos.x : 
+                           (target.position ? target.position.x : width/2));
+                           
+            const targetY = target.y !== undefined ? target.y : 
+                           (target.pos ? target.pos.y : 
+                           (target.position ? target.position.y : height/2));
             
-            // Define a direção no sistema de movimento (usando steering behaviors)
-            this.movement.setDirection(desiredDirection);
+            // Calcula vetor direção
+            const dirX = targetX - this.bacteria.pos.x;
+            const dirY = targetY - this.bacteria.pos.y;
             
-            // Calcula a razão da idade (0-1)
-            const ageRatio = this.bacteria.age / this.bacteria.lifespan;
+            // Calcula distância
+            const distance = Math.sqrt(dirX * dirX + dirY * dirY);
             
-            // Verifica se a bactéria tem acesso ao sistema de estados
-            const isResting = (this.bacteria.stateManager && 
-                              typeof this.bacteria.stateManager.getCurrentState === 'function') ? 
-                              this.bacteria.stateManager.getCurrentState() === 'resting' : 
-                              (this.bacteria.states && 
-                              typeof this.bacteria.states.getCurrentState === 'function' ? 
-                              this.bacteria.states.getCurrentState() === window.BacteriaStates.RESTING : 
-                              false);
+            // Se já chegou no destino, faz pequenos movimentos aleatórios
+            if (distance < 5) {
+                this.moveRandom(deltaTime, 0.2); // Movimento lento ao redor do alvo
+                return;
+            }
             
-            // Atualiza o movimento com os parâmetros necessários
-            const obstacles = this.bacteria.simulation ? this.bacteria.simulation.obstacles : [];
+            // Normaliza o vetor direção
+            const normalizedDirX = dirX / distance;
+            const normalizedDirY = dirY / distance;
             
-            // Atualiza o movimento usando a interface correta
-            this.movement.update(
-                ageRatio,
-                obstacles,
-                this.bacteria.size,
-                true,  // Evitar bordas
-                isResting
-            );
+            // Determina velocidade base com base no tipo de bactéria
+            let speed = 2.5 * speedMultiplier; // Velocidade base
             
-            // Sincroniza a posição da bactéria com o sistema de movimento
-            this.bacteria.pos.x = this.movement.position.x;
-            this.bacteria.pos.y = this.movement.position.y;
+            // Ajusta com base no tipo se disponível
+            if (this.bacteria.visualization && this.bacteria.visualization.bacteriaType !== undefined) {
+                const bacteriaType = this.bacteria.visualization.bacteriaType;
+                switch (bacteriaType) {
+                    case 0: // Bacilo - mais rápido em linha reta
+                        speed = 3.0 * speedMultiplier;
+                        break;
+                    case 1: // Coco - mais lento 
+                        speed = 2.0 * speedMultiplier;
+                        break;
+                    case 2: // Espirilo - rápido mas com caminho espiral
+                        speed = 3.5 * speedMultiplier;
+                        // Adiciona componente perpendicular ao movimento
+                        const perpFactor = sin(frameCount * 0.05) * 0.3;
+                        const perpX = -normalizedDirY * perpFactor;
+                        const perpY = normalizedDirX * perpFactor;
+                        normalizedDirX += perpX;
+                        normalizedDirY += perpY;
+                        break;
+                    case 3: // Vibrião - movimento com acelerações
+                        speed = (frameCount % 90 < 30) ? 3.5 * speedMultiplier : 2.0 * speedMultiplier;
+                        break;
+                }
+            }
+            
+            // Reduz velocidade se estiver perto do alvo para parar suavemente
+            if (distance < 50) {
+                speed *= distance / 50; // Desacelera gradualmente
+                speed = Math.max(speed, 0.5); // Garante velocidade mínima
+            }
+            
+            // Calcula o deslocamento
+            const moveX = normalizedDirX * speed * deltaTime;
+            const moveY = normalizedDirY * speed * deltaTime;
+            
+            // Adiciona pequena variação aleatória para movimento mais natural
+            const jitterX = random(-0.5, 0.5) * speedMultiplier;
+            const jitterY = random(-0.5, 0.5) * speedMultiplier;
+            
+            // Aplica o movimento DIRETAMENTE à posição da bactéria
+            this.bacteria.pos.x += moveX + jitterX;
+            this.bacteria.pos.y += moveY + jitterY;
+            
+            // Garante que a bactéria não saia da tela
+            const margin = this.bacteria.size || 20;
+            const worldWidth = width || 800;
+            const worldHeight = height || 600;
+            
+            if (this.bacteria.pos.x < margin) this.bacteria.pos.x = margin;
+            if (this.bacteria.pos.x > worldWidth - margin) this.bacteria.pos.x = worldWidth - margin;
+            if (this.bacteria.pos.y < margin) this.bacteria.pos.y = margin;
+            if (this.bacteria.pos.y > worldHeight - margin) this.bacteria.pos.y = worldHeight - margin;
+            
+            // Sincroniza a posição com o sistema de movimento (se existir)
+            if (this.movement && this.movement.position) {
+                this.movement.position.x = this.bacteria.pos.x;
+                this.movement.position.y = this.bacteria.pos.y;
+            }
+            
+            // Log do movimento a cada 60 frames para não sobrecarregar o console
+            if (frameCount % 60 === 0) {
+                console.log(`Bactéria ${this.bacteria.id} movendo-se em direção ao alvo: distância=${distance.toFixed(1)}, velocidade=${speed.toFixed(1)}`);
+            }
+            
         } catch (error) {
-            console.error("Erro ao mover em direção ao alvo:", error);
+            console.error("Erro fatal em moveTowards:", error);
+            
+            // Movimento de emergência em caso de erro
+            if (this.bacteria && this.bacteria.pos) {
+                const randomStep = p5.Vector.random2D().mult(2);
+                this.bacteria.pos.add(randomStep);
+            }
         }
     }
 
@@ -377,82 +348,154 @@ class BacteriaMovement {
      * @returns {boolean} - Se evitou algum obstáculo
      */
     avoidObstacles(obstacles, deltaTime) {
-        if (!obstacles || obstacles.length === 0) {
-            return false;
-        }
-        
-        // Garante que o movimento está inicializado
-        if (!this.movement || !this.movement.obstacle) {
-            console.warn("Sistema de movimento não inicializado corretamente para evitar obstáculos");
-            return false;
-        }
-        
-        let obstaclesToAvoid = [];
-        const size = this.bacteria.size || 10;
-        
-        // Filtra apenas obstáculos próximos para melhorar a performance
-        for (const obstacle of obstacles) {
-            // Verificação de segurança para obstáculo
-            if (!obstacle || !obstacle.collidesWith) continue;
+        try {
+            // Verifica se há obstáculos válidos para evitar
+            if (!obstacles || obstacles.length === 0) {
+                return false;
+            }
             
-            // Calcula a distância aproximada para rápida verificação
-            const approximateDistance = this.getApproximateDistance(obstacle);
-            const detectionRadius = size * 15; // Aumentado o raio de detecção para detecção mais precoce
-            
-            // Se o obstáculo estiver próximo, adiciona à lista
-            if (approximateDistance < detectionRadius) {
-                // Verificação adicional de colisão
-                const safetyMargin = size * 2.0; // Aumentado a margem de segurança
-                if (obstacle.collidesWith(this.bacteria.pos, safetyMargin)) {
-                    // Se já está em colisão, aplica uma força de repulsão muito mais forte
-                    this.handleObstacleCollision(obstacle, size);
-                    return true;
+            // Verifica e garante que a posição da bactéria é válida antes de prosseguir
+            if (this.bacteria && (!this.bacteria.pos || typeof this.bacteria.pos.x !== 'number' || typeof this.bacteria.pos.y !== 'number')) {
+                console.warn(`Posição inválida durante avoidObstacles - Corrigindo...`);
+                
+                // Tenta corrigir a posição se for um objeto aninhado
+                if (this.bacteria.pos && typeof this.bacteria.pos.x === 'object' && this.bacteria.pos.x && typeof this.bacteria.pos.x.x === 'number') {
+                    console.log(`Corrigindo posição aninhada em avoidObstacles:`, this.bacteria.pos);
+                    
+                    // Usa a posição interna se disponível
+                    const newX = this.bacteria.pos.x.x;
+                    const newY = typeof this.bacteria.pos.y === 'number' ? this.bacteria.pos.y : 
+                                (typeof this.bacteria.pos.x.y === 'number' ? this.bacteria.pos.x.y : height/2);
+                    
+                    // Atualiza a posição com os valores corretos
+                    if (typeof createVector === 'function') {
+                        this.bacteria.pos = createVector(newX, newY);
+                    } else {
+                        this.bacteria.pos = { x: newX, y: newY };
+                    }
+                    
+                    console.log(`Posição corrigida para: (${this.bacteria.pos.x}, ${this.bacteria.pos.y})`);
+                } else {
+                    // Se não conseguir recuperar, cria uma nova posição válida
+                    const worldWidth = typeof width !== 'undefined' ? width : 800;
+                    const worldHeight = typeof height !== 'undefined' ? height : 600;
+                    
+                    if (typeof createVector === 'function') {
+                        this.bacteria.pos = createVector(
+                            random(worldWidth * 0.1, worldWidth * 0.9),
+                            random(worldHeight * 0.1, worldHeight * 0.9)
+                        );
+                    } else {
+                        this.bacteria.pos = { 
+                            x: random(worldWidth * 0.1, worldWidth * 0.9),
+                            y: random(worldHeight * 0.1, worldHeight * 0.9)
+                        };
+                    }
+                    
+                    console.log(`Nova posição gerada: (${this.bacteria.pos.x}, ${this.bacteria.pos.y})`);
                 }
                 
-                // Adiciona à lista de obstáculos a serem evitados
-                obstaclesToAvoid.push(obstacle);
+                // Também sincroniza com o sistema de movimento
+                if (this.movement && this.movement.position) {
+                    this.movement.position.x = this.bacteria.pos.x;
+                    this.movement.position.y = this.bacteria.pos.y;
+                }
             }
-        }
-        
-        // Se há obstáculos para evitar, use o sistema de movimento para evitá-los
-        if (obstaclesToAvoid.length > 0) {
-            // Usa o sistema de movimento para evitar os obstáculos
-            let avoided = this.movement.obstacle.avoidObstacles(obstaclesToAvoid, size);
             
-            // Verifica a direção atual e o próximo ponto de movimento
-            if (!avoided) {
-                const velocity = this.movement.velocity || this.movement.base.velocity;
-                if (velocity && velocity.mag() > 0.1) {
-                    // Prevê posição futura com alcance maior
-                    const predictedPos = createVector(
-                        this.bacteria.pos.x + velocity.x * 15, // Aumentado o alcance de previsão
-                        this.bacteria.pos.y + velocity.y * 15
-                    );
+            // Garante que o movimento está inicializado
+            if (!this.movement || !this.movement.obstacle) {
+                console.warn("Sistema de movimento não inicializado corretamente para evitar obstáculos");
+                return false;
+            }
+            
+            let obstaclesToAvoid = [];
+            const size = this.bacteria.size || 10;
+            
+            // Filtra apenas obstáculos próximos para melhorar a performance
+            for (const obstacle of obstacles) {
+                // Verificação de segurança para obstáculo
+                if (!obstacle || !obstacle.collidesWith) continue;
+                
+                // Calcula a distância aproximada para rápida verificação
+                const approximateDistance = this.getApproximateDistance(obstacle);
+                const detectionRadius = size * 15; // Aumentado o raio de detecção para detecção mais precoce
+                
+                // Se o obstáculo estiver próximo, adiciona à lista
+                if (approximateDistance < detectionRadius) {
+                    // Verificação adicional de colisão
+                    const safetyMargin = size * 2.0; // Aumentado a margem de segurança
+                    if (obstacle.collidesWith(this.bacteria.pos, safetyMargin)) {
+                        // Se já está em colisão, aplica uma força de repulsão muito mais forte
+                        this.handleObstacleCollision(obstacle, size);
+                        return true;
+                    }
                     
-                    // Verifica se a posição prevista colide com algum obstáculo
-                    for (const obstacle of obstaclesToAvoid) {
-                        if (obstacle.collidesWith(predictedPos, size * 1.2)) { // Margem de segurança aumentada
-                            // Se colide, aplica uma força na direção oposta
-                            const obstacleCenter = createVector(
-                                obstacle.x + obstacle.w/2,
-                                obstacle.y + obstacle.h/2
-                            );
-                            const awayVector = p5.Vector.sub(this.bacteria.pos, obstacleCenter);
-                            awayVector.normalize();
-                            awayVector.mult(5.0); // Força de repulsão aumentada
-                            
-                            this.movement.applyForce(awayVector);
-                            avoided = true;
-                            break;
+                    // Adiciona à lista de obstáculos a serem evitados
+                    obstaclesToAvoid.push(obstacle);
+                }
+            }
+            
+            // Se há obstáculos para evitar, use o sistema de movimento para evitá-los
+            if (obstaclesToAvoid.length > 0) {
+                // Usa o sistema de movimento para evitar os obstáculos
+                let avoided = this.movement.obstacle.avoidObstacles(obstaclesToAvoid, size);
+                
+                // Verifica a direção atual e o próximo ponto de movimento
+                if (!avoided) {
+                    const velocity = this.movement.velocity || this.movement.base.velocity;
+                    if (velocity && velocity.mag() > 0.1) {
+                        // Prevê posição futura com alcance maior
+                        const predictedPos = createVector(
+                            this.bacteria.pos.x + velocity.x * 15, // Aumentado o alcance de previsão
+                            this.bacteria.pos.y + velocity.y * 15
+                        );
+                        
+                        // Verifica se a posição prevista colide com algum obstáculo
+                        for (const obstacle of obstaclesToAvoid) {
+                            if (obstacle.collidesWith(predictedPos, size * 1.2)) { // Margem de segurança aumentada
+                                // Se colide, aplica uma força na direção oposta
+                                const obstacleCenter = createVector(
+                                    obstacle.x + obstacle.w/2,
+                                    obstacle.y + obstacle.h/2
+                                );
+                                const awayVector = p5.Vector.sub(this.bacteria.pos, obstacleCenter);
+                                awayVector.normalize();
+                                awayVector.mult(5.0); // Força de repulsão aumentada
+                                
+                                this.movement.applyForce(awayVector);
+                                avoided = true;
+                                break;
+                            }
                         }
                     }
                 }
+                
+                // Verifica novamente a posição após a lógica de evasão
+                if (this.bacteria && this.bacteria.pos && typeof this.bacteria.pos.x === 'object') {
+                    console.warn("Posição inválida após evitar obstáculos. Corrigindo...");
+                    const safeX = typeof this.bacteria.pos.x.x === 'number' ? this.bacteria.pos.x.x : random(width);
+                    const safeY = typeof this.bacteria.pos.y === 'number' ? this.bacteria.pos.y : random(height);
+                    
+                    // Atualiza para valores seguros
+                    this.bacteria.pos = typeof createVector === 'function' 
+                        ? createVector(safeX, safeY) 
+                        : { x: safeX, y: safeY };
+                    
+                    // Sincroniza com o sistema de movimento
+                    if (this.movement && this.movement.position) {
+                        this.movement.position.x = this.bacteria.pos.x;
+                        this.movement.position.y = this.bacteria.pos.y;
+                    }
+                }
+                
+                return avoided;
             }
             
-            return avoided;
+            return false;
+        } catch (error) {
+            console.error("Erro ao evitar obstáculos:", error);
+            return false;
         }
-        
-        return false;
     }
     
     /**
@@ -489,39 +532,40 @@ class BacteriaMovement {
         const escapeVector = p5.Vector.sub(this.bacteria.pos, obstacleCenter);
         escapeVector.normalize();
         
-        // Força muito mais forte para garantir que saia do obstáculo
-        escapeVector.mult(size * 1.5); // Aumentado significativamente
+        // Força mais forte para garantir que saia do obstáculo, mas não exagerada
+        escapeVector.mult(size * 1.0);
         
         // Aplica o vetor de fuga diretamente à posição
         this.bacteria.pos.add(escapeVector);
         
-        // Reduz velocidade atual drasticamente para evitar continuar na mesma direção
+        // Reduz velocidade atual, mas não drasticamente (0.5 em vez de 0.2)
         if (this.movement && this.movement.velocity) {
-            this.movement.velocity.mult(0.2); // Reduz mais a velocidade
-        }
-        
-        // Se ainda está em colisão, move um pouco mais e tenta em diferentes ângulos
-        if (obstacle.collidesWith(this.bacteria.pos, size)) {
-            // Primeira tentativa: adicionar mais movimento na mesma direção
-            this.bacteria.pos.add(escapeVector);
+            this.movement.velocity.mult(0.5);
             
-            // Segunda tentativa: tentar um ângulo ligeiramente diferente
-            if (obstacle.collidesWith(this.bacteria.pos, size)) {
-                const angle = random(-PI/4, PI/4);
-                escapeVector.rotate(angle);
-                escapeVector.mult(1.5); // Força ainda maior
-                this.bacteria.pos.add(escapeVector);
-                
-                // Log para debug
-                console.log(`Colisão persistente com obstáculo. Tentando ângulo alternativo: ${angle}`);
+            // Garante velocidade mínima para evitar paralisia
+            if (this.movement.velocity.mag() < 0.5) {
+                // Adiciona uma pequena velocidade mínima na direção de fuga
+                this.movement.velocity.add(p5.Vector.mult(escapeVector, 0.5));
             }
         }
         
-        // Garante que a posição está sincronizada com o sistema de movimento
-        if (this.movement && this.movement.base) {
-            this.movement.base.position.x = this.bacteria.pos.x;
-            this.movement.base.position.y = this.bacteria.pos.y;
+        // Adiciona um componente aleatório para evitar ficar travado em situações de equilíbrio
+        const randomForce = p5.Vector.random2D();
+        randomForce.mult(size * 0.3);
+        
+        // Aplica a força aleatória
+        if (this.movement && this.movement.applyForce) {
+            this.movement.applyForce(randomForce);
+        } else if (this.movement && this.movement.velocity) {
+            this.movement.velocity.add(randomForce);
         }
+        
+        // Log para depuração da colisão
+        if (frameCount % 60 === 0) {
+            console.log(`Bactéria ${this.bacteria.id} colidiu com obstáculo e foi reposicionada`);
+        }
+        
+        return true;
     }
 
     /**
@@ -702,6 +746,14 @@ class BacteriaMovement {
             // Inicializa stateActions caso não seja fornecido
             stateActions = stateActions || {};
             
+            // Inicializa environment caso não seja fornecido
+            environment = environment || {
+                nearbyFood: [],
+                nearbyBacteria: [],
+                nearbyPredators: [],
+                obstacles: []
+            };
+            
             // Se não deve se mover, para o movimento
             if (stateActions && stateActions.shouldMove === false) {
                 this.stop();
@@ -713,102 +765,40 @@ class BacteriaMovement {
             // Variável para rastrear se algum movimento foi aplicado
             let movementApplied = false;
             
-            // Verifica se há outras bactérias para interagir
-            if (environment && Array.isArray(environment.nearbyBacteria) && environment.nearbyBacteria.length > 0) {
-                this.interactWithBacteria(environment.nearbyBacteria, environment);
+            // Garante que o deltaTime seja válido
+            deltaTime = typeof deltaTime === 'number' && !isNaN(deltaTime) ? deltaTime : 1;
+            
+            // Movimento básico de emergência se não houver interações
+            if (!movementApplied) {
+                // Aplica um movimento aleatório básico para garantir que há movimento
+                this.moveRandom(deltaTime, 0.5);
+                movementApplied = true;
             }
             
-            // Determina o comportamento com base nas condições do ambiente
-            if (stateActions.targetType === 'food' && stateActions.target) {
-                // Move em direção à comida
-                try {
-                    this.seekTarget(stateActions.target, stateActions.speedMultiplier || 1.2);
-                    movementApplied = true;
-                } catch (err) {
-                    console.error("Erro ao buscar comida:", err);
-                }
-            } else if (stateActions.targetType === 'mate' && stateActions.target) {
-                // Move em direção ao parceiro
-                try {
-                    this.seekTarget(stateActions.target, stateActions.speedMultiplier || 0.8);
-                    movementApplied = true;
-                } catch (err) {
-                    console.error("Erro ao buscar parceiro:", err);
-                }
-            } else if (stateActions.targetType === 'escape' && stateActions.target) {
-                // Foge do perigo
-                try {
-                    this.fleeFrom(stateActions.target, stateActions.speedMultiplier || 1.5);
-                    movementApplied = true;
-                } catch (err) {
-                    console.error("Erro ao fugir:", err);
-                }
+            // Atualiza a posição da bacteria
+            if (this.bacteria && this.bacteria.pos && this.movement && this.movement.position) {
+                this.bacteria.pos.x = this.movement.position.x;
+                this.bacteria.pos.y = this.movement.position.y;
             }
             
-            // Se nenhum movimento específico foi aplicado OU a velocidade está muito baixa,
-            // aplica movimento aleatório como fallback
-            if (!movementApplied || (this.movement && this.movement.velocity && this.movement.velocity.mag() < 0.3)) {
-                // Calcula um multiplicador de velocidade baseado na energia
-                let speedModifier = 1.0;
+            // Garante que velocidade nunca é um valor inválido
+            if (!this.movement.velocity || 
+                isNaN(this.movement.velocity.x) || 
+                isNaN(this.movement.velocity.y)) {
                 
-                // Se tiver energia suficiente, move-se mais rápido
-                if (this.bacteria && this.bacteria.stateManager) {
-                    const energy = this.bacteria.stateManager.currentEnergy;
-                    speedModifier *= (energy > 70) ? 1.2 : (energy > 30) ? 1.0 : 0.7;
-                }
-                
-                // Introduz um fator de personalidade baseado no DNA
-                if (this.bacteria && this.bacteria.dna && this.bacteria.dna.genes) {
-                    // Usa o gene de velocidade, se disponível
-                    if (this.bacteria.dna.genes.speed !== undefined) {
-                        speedModifier *= 0.5 + this.bacteria.dna.genes.speed;
-                    }
-                }
-                
-                // Garante um multiplicador mínimo para evitar imobilidade
-                speedModifier = Math.max(speedModifier, 0.5);
-                
-                // Aplica movimento aleatório
-                this.moveRandom(deltaTime, speedModifier);
-                
-                if (frameCount % 180 === 0) {
-                    console.log(`Bactéria ${this.bacteria.id} movendo aleatoriamente (fallback): speed=${speedModifier.toFixed(2)}`);
-                }
+                this.movement.velocity = p5.Vector.random2D();
+                this.movement.velocity.mult(2); // Velocidade inicial razoável
             }
             
-            // Sincroniza a posição da bactéria com o sistema de movimento e corrige valores NaN
-            this.syncPosition();
-            
-            // Evita obstáculos
-            if (environment && environment.obstacles && environment.obstacles.length > 0) {
-                try {
-                    this.avoidObstacles(environment.obstacles, deltaTime);
-                } catch (err) {
-                    console.error("Erro ao evitar obstáculos:", err);
-                }
-            }
-            
-            // Verifica mais uma vez se a posição está válida após todas as atualizações
-            if (this.bacteria && this.bacteria.pos) {
-                if (isNaN(this.bacteria.pos.x) || isNaN(this.bacteria.pos.y)) {
-                    console.warn(`Posição inválida detectada após atualização na bactéria ${this.bacteria.id}. Corrigindo...`);
-                    this.syncPosition();
-                }
+            // Aplica velocidade máxima para evitar movimento excessivo
+            if (typeof this.movement.velocity.limit === 'function') {
+                this.movement.velocity.limit(this.maxSpeed);
             }
         } catch (error) {
-            console.error("Erro geral no sistema de movimento:", error);
-            // Tenta recuperar o sistema em caso de erro grave
-            if (this.bacteria && this.movement) {
-                try {
-                    // Reinicia a posição e velocidade para valores seguros
-                    const pos = createVector(random(width), random(height));
-                    this.bacteria.pos = pos.copy();
-                    this.movement.position = pos.copy();
-                    this.movement.velocity = p5.Vector.random2D().mult(1.0);
-                } catch (e) {
-                    console.error("Erro na recuperação de emergência:", e);
-                }
-            }
+            console.error("Erro na atualização do movimento da bactéria:", error);
+            
+            // Movimento de emergência em caso de erro
+            this.moveRandom(1, 1);
         }
     }
 
@@ -944,62 +934,87 @@ class BacteriaMovement {
     }
 
     /**
-     * Sincroniza a posição da bactéria com o sistema de movimento
-     * Garante que não haja valores NaN
+     * Mantém a bactéria dentro dos limites da tela
      */
-    syncPosition() {
-        if (!this.bacteria || !this.movement || !this.movement.position) return;
-        
+    constrainToBounds() {
         try {
-            // Verifica se há valores NaN na posição do movimento
-            if (isNaN(this.movement.position.x) || isNaN(this.movement.position.y)) {
-                console.warn("Corrigindo valores NaN na posição do movimento");
-                
-                // Usa a posição da bactéria se for válida, ou gera nova posição
-                if (this.bacteria.pos && !isNaN(this.bacteria.pos.x) && !isNaN(this.bacteria.pos.y)) {
-                    this.movement.position.x = this.bacteria.pos.x;
-                    this.movement.position.y = this.bacteria.pos.y;
-                } else {
-                    this.movement.position.x = random(width);
-                    this.movement.position.y = random(height);
-                    
-                    // Atualiza também a posição da bactéria
-                    if (this.bacteria.pos) {
-                        this.bacteria.pos.x = this.movement.position.x;
-                        this.bacteria.pos.y = this.movement.position.y;
-                    }
-                }
-            } 
-            // Verifica se há valores NaN na posição da bactéria
-            else if (this.bacteria.pos && (isNaN(this.bacteria.pos.x) || isNaN(this.bacteria.pos.y))) {
-                console.warn("Corrigindo valores NaN na posição da bactéria");
-                
-                // Usa a posição do sistema de movimento
-                this.bacteria.pos.x = this.movement.position.x;
-                this.bacteria.pos.y = this.movement.position.y;
+            // Verifica se há posição para restringir
+            if (!this.movement || !this.movement.position) return;
+            
+            // Recupera dimensões do mundo
+            const worldWidth = typeof width !== 'undefined' ? width : 800;
+            const worldHeight = typeof height !== 'undefined' ? height : 600;
+            
+            // Determina o raio da bactéria para evitar que fique parcialmente fora da tela
+            const radius = this.bacteria && typeof this.bacteria.size === 'number' ? 
+                          this.bacteria.size / 2 : 10;
+            
+            // Calcula limites seguros
+            const minX = radius;
+            const maxX = worldWidth - radius;
+            const minY = radius;
+            const maxY = worldHeight - radius;
+            
+            // Restringe a posição
+            if (this.movement.position.x < minX) {
+                this.movement.position.x = minX;
+                // Inverte a direção para comportamento de ricochete
+                if (this.movement.velocity) this.movement.velocity.x *= -0.8;
+            } else if (this.movement.position.x > maxX) {
+                this.movement.position.x = maxX;
+                if (this.movement.velocity) this.movement.velocity.x *= -0.8;
             }
             
-            // Sincroniza as posições em ambas as direções para garantir consistência
-            if (this.movement.position && this.bacteria.pos) {
+            if (this.movement.position.y < minY) {
+                this.movement.position.y = minY;
+                if (this.movement.velocity) this.movement.velocity.y *= -0.8;
+            } else if (this.movement.position.y > maxY) {
+                this.movement.position.y = maxY;
+                if (this.movement.velocity) this.movement.velocity.y *= -0.8;
+            }
+            
+            // Atualiza a posição da bactéria para refletir os limites
+            if (this.bacteria && this.bacteria.pos) {
                 this.bacteria.pos.x = this.movement.position.x;
                 this.bacteria.pos.y = this.movement.position.y;
             }
         } catch (error) {
-            console.error("Erro ao sincronizar posição:", error);
-            
-            // Em caso de erro grave, reinicia ambas as posições
-            const newX = random(width);
-            const newY = random(height);
-            
-            if (this.bacteria.pos) {
-                this.bacteria.pos.x = newX;
-                this.bacteria.pos.y = newY;
+            console.error("Erro ao restringir aos limites:", error);
+        }
+    }
+    
+    /**
+     * Sincroniza a posição da bactéria com o sistema de movimento
+     */
+    syncPosition() {
+        try {
+            // Garante que tanto a bactéria quanto o sistema de movimento têm posições válidas
+            if (!this.bacteria || !this.bacteria.pos || !this.movement || !this.movement.position) {
+                return;
             }
             
-            if (this.movement.position) {
-                this.movement.position.x = newX;
-                this.movement.position.y = newY;
+            // Verifica se as posições têm componentes NaN
+            if (isNaN(this.bacteria.pos.x) || isNaN(this.bacteria.pos.y)) {
+                // Corrige os componentes NaN na posição da bactéria
+                this.bacteria.pos.x = isNaN(this.bacteria.pos.x) ? 
+                    (typeof width !== 'undefined' ? random(width) : 400) : this.bacteria.pos.x;
+                this.bacteria.pos.y = isNaN(this.bacteria.pos.y) ? 
+                    (typeof height !== 'undefined' ? random(height) : 300) : this.bacteria.pos.y;
             }
+            
+            if (isNaN(this.movement.position.x) || isNaN(this.movement.position.y)) {
+                // Corrige os componentes NaN na posição do movimento
+                this.movement.position.x = isNaN(this.movement.position.x) ? 
+                    this.bacteria.pos.x : this.movement.position.x;
+                this.movement.position.y = isNaN(this.movement.position.y) ? 
+                    this.bacteria.pos.y : this.movement.position.y;
+            }
+            
+            // Sincroniza as posições em ambas as direções para garantir consistência
+            this.bacteria.pos.x = this.movement.position.x;
+            this.bacteria.pos.y = this.movement.position.y;
+        } catch (error) {
+            console.error("Erro ao sincronizar posições:", error);
         }
     }
 
@@ -1200,6 +1215,218 @@ class BacteriaMovement {
         } catch (error) {
             console.error("Erro ao evitar outras espécies:", error);
         }
+    }
+
+    /**
+     * Verifica e corrige a posição para garantir que seja um objeto válido com coordenadas numéricas
+     * @param {Object} pos - O objeto de posição para verificar
+     * @param {number} defaultX - Valor X padrão se inválido
+     * @param {number} defaultY - Valor Y padrão se inválido
+     * @returns {Object} - Objeto de posição corrigido
+     */
+    validatePosition(pos, defaultX = width/2, defaultY = height/2) {
+        // Verifica se a posição existe
+        if (!pos) {
+            console.warn("Posição é null ou undefined, criando nova posição");
+            return { x: defaultX, y: defaultY };
+        }
+        
+        // Verifica se é um objeto
+        if (typeof pos !== 'object') {
+            console.warn("Posição não é um objeto, criando nova posição");
+            return { x: defaultX, y: defaultY };
+        }
+        
+        // Se pos.x for um objeto (erro comum observado), tenta corrigi-lo
+        if (typeof pos.x === 'object') {
+            console.warn("Erro: pos.x é um objeto:", pos.x);
+            // Tenta usar pos.x.x se disponível, caso contrário usa padrão
+            const correctedX = (pos.x && typeof pos.x.x === 'number') ? pos.x.x : defaultX;
+            return { 
+                x: correctedX,
+                y: (typeof pos.y === 'number' && !isNaN(pos.y)) ? pos.y : defaultY
+            };
+        }
+        
+        // Verifica se as coordenadas são numéricas
+        const validX = typeof pos.x === 'number' && !isNaN(pos.x) && isFinite(pos.x);
+        const validY = typeof pos.y === 'number' && !isNaN(pos.y) && isFinite(pos.y);
+        
+        // Se ambos forem válidos, retorna a posição original
+        if (validX && validY) {
+            return pos;
+        }
+        
+        // Cria uma nova posição com valores corrigidos
+        return {
+            x: validX ? pos.x : defaultX,
+            y: validY ? pos.y : defaultY
+        };
+    }
+
+    /**
+     * Atualiza a posição da bactéria com base em sua velocidade
+     * @param {number} deltaTime - Tempo desde a última atualização
+     */
+    updatePosition(deltaTime = 1) {
+        try {
+            // Validar posição e velocidade atuais
+            const bacteria = this.bacteria;
+            
+            if (!bacteria) {
+                console.error("Referência à bactéria inválida no movimento");
+                return;
+            }
+            
+            // Verificações mais robustas para posição
+            if (!bacteria.pos) {
+                console.warn("Bactéria sem objeto de posição, criando novo");
+                bacteria.pos = { x: width/2, y: height/2 };
+            }
+            
+            // Tratamento específico para caso onde pos.x é um objeto (erro comum)
+            if (typeof bacteria.pos.x === 'object') {
+                console.warn("Erro: bacteria.pos.x é um objeto. Tentando corrigir:", bacteria.pos.x);
+                
+                // Tenta extrair o valor numérico de pos.x.x se disponível
+                if (bacteria.pos.x && typeof bacteria.pos.x.x === 'number') {
+                    const tempX = bacteria.pos.x.x;
+                    const tempY = typeof bacteria.pos.y === 'number' ? bacteria.pos.y : height/2;
+                    
+                    // Cria um novo objeto de posição com valores corretos
+                    bacteria.pos = { 
+                        x: tempX, 
+                        y: tempY 
+                    };
+                    
+                    console.log(`Posição corrigida para: (${bacteria.pos.x}, ${bacteria.pos.y})`);
+                } else {
+                    // Não foi possível recuperar o valor, usa posição padrão
+                    bacteria.pos = { 
+                        x: width/2, 
+                        y: height/2 
+                    };
+                    console.warn("Usando posição padrão após falha na correção");
+                }
+            }
+            
+            // Verifica e corrige coordenadas NaN ou não-finitas
+            if (isNaN(bacteria.pos.x) || !isFinite(bacteria.pos.x) || 
+                isNaN(bacteria.pos.y) || !isFinite(bacteria.pos.y)) {
+                
+                console.warn(`Coordenadas inválidas: (${bacteria.pos.x}, ${bacteria.pos.y}). Corrigindo...`);
+                
+                // Preserva coordenadas válidas, substitui inválidas
+                bacteria.pos.x = (!isNaN(bacteria.pos.x) && isFinite(bacteria.pos.x)) ? 
+                                   bacteria.pos.x : width/2;
+                bacteria.pos.y = (!isNaN(bacteria.pos.y) && isFinite(bacteria.pos.y)) ? 
+                                   bacteria.pos.y : height/2;
+                
+                console.log(`Coordenadas corrigidas para: (${bacteria.pos.x}, ${bacteria.pos.y})`);
+            }
+            
+            // Validação e correção de velocidade
+            if (!bacteria.vel || typeof bacteria.vel !== 'object') {
+                console.warn("Objeto de velocidade inválido, recriando");
+                this.initVelocity(bacteria);
+            } else if (typeof bacteria.vel.x === 'object' || typeof bacteria.vel.y === 'object') {
+                // Trata caso onde vel.x ou vel.y são objetos
+                console.warn("Velocidade contém objetos aninhados, corrigindo");
+                this.initVelocity(bacteria);
+            } else if (isNaN(bacteria.vel.x) || isNaN(bacteria.vel.y) || 
+                      !isFinite(bacteria.vel.x) || !isFinite(bacteria.vel.y)) {
+                console.warn(`Velocidade com valores inválidos: (${bacteria.vel.x}, ${bacteria.vel.y}), corrigindo`);
+                
+                // Tenta preservar componentes válidos
+                const vx = (!isNaN(bacteria.vel.x) && isFinite(bacteria.vel.x)) ? bacteria.vel.x : 0;
+                const vy = (!isNaN(bacteria.vel.y) && isFinite(bacteria.vel.y)) ? bacteria.vel.y : 0;
+                
+                // Se ambos componentes se tornaram zero, inicializa com velocidade aleatória
+                if (vx === 0 && vy === 0) {
+                    this.initVelocity(bacteria);
+                } else {
+                    bacteria.vel.x = vx;
+                    bacteria.vel.y = vy;
+                }
+            }
+            
+            // Verifica se os métodos necessários existem na velocidade
+            if (typeof bacteria.vel.add !== 'function' || typeof bacteria.vel.limit !== 'function') {
+                console.warn("Métodos de velocidade ausentes, adicionando");
+                this.addVectorMethods(bacteria.vel);
+            }
+            
+            // Atualiza posição com base na velocidade
+            bacteria.pos.x += bacteria.vel.x * deltaTime;
+            bacteria.pos.y += bacteria.vel.y * deltaTime;
+            
+            // Verifica limites do mundo
+            this.checkWorldBoundaries();
+            
+            // Verificação final da posição
+            if (typeof bacteria.pos.x !== 'number' || typeof bacteria.pos.y !== 'number' ||
+                isNaN(bacteria.pos.x) || isNaN(bacteria.pos.y) ||
+                !isFinite(bacteria.pos.x) || !isFinite(bacteria.pos.y)) {
+                
+                console.error(`ERRO GRAVE: Posição inválida após atualização: (${bacteria.pos.x}, ${bacteria.pos.y})`);
+                bacteria.pos = { 
+                    x: width/2, 
+                    y: height/2 
+                };
+            }
+        } catch (error) {
+            console.error("Erro ao atualizar posição:", error);
+            
+            // Recuperação de erro crítico
+            if (this.bacteria) {
+                this.bacteria.pos = { 
+                    x: width/2, 
+                    y: height/2 
+                };
+            }
+        }
+    }
+    
+    /**
+     * Inicializa um objeto de velocidade para a bactéria
+     * @param {Bacteria} bacteria - A bactéria para inicializar velocidade
+     */
+    initVelocity(bacteria) {
+        const angle = random(TWO_PI);
+        const speed = 3.0;
+        
+        bacteria.vel = {
+            x: cos(angle) * speed,
+            y: sin(angle) * speed
+        };
+        
+        this.addVectorMethods(bacteria.vel);
+        console.log(`Nova velocidade criada: (${bacteria.vel.x.toFixed(2)}, ${bacteria.vel.y.toFixed(2)})`);
+    }
+    
+    /**
+     * Adiciona métodos de vetor a um objeto simples de velocidade
+     * @param {Object} vel - Objeto de velocidade
+     */
+    addVectorMethods(vel) {
+        if (!vel) return;
+        
+        vel.add = function(v) {
+            if (!v) return this;
+            this.x += (typeof v.x === 'number') ? v.x : 0;
+            this.y += (typeof v.y === 'number') ? v.y : 0;
+            return this;
+        };
+        
+        vel.limit = function(max) {
+            const mSq = this.x * this.x + this.y * this.y;
+            if (mSq > max * max) {
+                const norm = max / Math.sqrt(mSq);
+                this.x *= norm;
+                this.y *= norm;
+            }
+            return this;
+        };
     }
 }
 

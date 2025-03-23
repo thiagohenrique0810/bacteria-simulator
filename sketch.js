@@ -14,6 +14,8 @@ let communication;       // Sistema de comunicação
  * Configuração inicial
  */
 function setup() {
+    console.log('🚀 Inicializando simulação...');
+    
     // Calcula o tamanho adequado para o canvas considerando os painéis laterais
     const totalWidth = windowWidth;
     const simulationWidth = totalWidth - controlsWidth - chatWidth;
@@ -26,7 +28,8 @@ function setup() {
     // Aguarda um momento para garantir que o p5.js está pronto
     window.setTimeout(() => {
         // Inicializa a simulação
-        simulation = new Simulation();
+        simulation = new Simulation(canvas);
+        console.log('✅ Objeto simulation criado');
         
         // Ajusta as dimensões da simulação para o canvas
         simulation.width = simulationWidth;
@@ -59,6 +62,20 @@ function setup() {
         
         // Marca setup como completo
         setupComplete = true;
+        
+        console.log('✅ Método init() executado');
+        
+        // Garante que os callbacks são configurados
+        if (typeof simulation.postInitialize === 'function') {
+            console.log('🔄 Chamando método postInitialize()...');
+            simulation.postInitialize();
+            console.log('✅ Método postInitialize() executado');
+        } else {
+            console.error('❌ ERRO: Método postInitialize não está disponível na simulação');
+        }
+        
+        // Define o zoom inicial
+        zoom = 1;
         
         console.log('Setup completo');
     }, 100);

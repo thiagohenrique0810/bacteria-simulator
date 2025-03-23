@@ -8,29 +8,82 @@ class Bacteria extends BacteriaBase {
      * @param {Object} params - Parâmetros de inicialização
      */
     constructor(params = {}) {
-        // Extrai parâmetros
-        const { x, y, parentDNA, energy = 100, initialState, initialEnergy } = params;
+        // Extrai parâmetros com valores padrão e verificações
+        const x = typeof params.x === 'number' && !isNaN(params.x) ? params.x : random(width * 0.1, width * 0.9);
+        const y = typeof params.y === 'number' && !isNaN(params.y) ? params.y : random(height * 0.1, height * 0.9);
+        const parentDNA = params.parentDNA || null;
+        const energy = typeof params.energy === 'number' ? params.energy : 100;
         
-        // Chama construtor da classe pai
-        super({ x, y, parentDNA, energy });
+        // Chama construtor da classe pai com parâmetros individuais
+        super(x, y, parentDNA, energy);
+        
+        // Garante que this.pos é um vetor válido
+        if (!this.pos || typeof this.pos.x !== 'number' || isNaN(this.pos.x)) {
+            console.warn(`Posição inválida após construtor da classe pai para ${this.id}, recriando`);
+            this.pos = createVector(x, y);
+        }
+        
+        // Define estado inicial e energia
+        this.initialState = params.initialState || 'exploring';
+        this.initialEnergy = typeof params.initialEnergy === 'number' ? params.initialEnergy : energy;
+        this.isFemale = params.isFemale === true;
         
         // Inicializa comportamentos
         this.initBehaviors();
         
         // Inicializa sistema de movimento (verificando se existe)
         try {
+            // Verificar se a classe Movement está disponível antes de criar BacteriaMovement
+            if (typeof Movement !== 'function' && typeof window.Movement !== 'function') {
+                console.error(`Classe Movement não encontrada. Verificando se o arquivo foi carregado.`);
+                // Tentar registrar uma classe Movement básica para fallback
+                window.Movement = class Movement {
+                    constructor(pos, size) {
+                        this.position = pos.copy ? pos.copy() : createVector(pos.x, pos.y);
+                        this.velocity = createVector(random(-1, 1), random(-1, 1));
+                        this.size = size || 10;
+                        this.maxSpeed = 3;
+                    }
+                };
+            }
+            
             this.movement = new BacteriaMovement(this);
+            
             if (!this.movement) {
                 console.error(`Falha ao criar sistema de movimento para bactéria ${this.id}`);
                 // Tenta criar novamente com um construtor alternativo
                 this.movement = new window.BacteriaMovement(this);
             }
+            
+            // Verificação adicional após criar o movimento
+            if (this.movement && (!this.movement.movement || !this.movement.movement.velocity)) {
+                console.warn(`Sistema de movimento criado mas incompleto para bactéria ${this.id}, inicializando propriedades básicas`);
+                
+                if (!this.movement.movement) {
+                    this.movement.movement = {
+                        position: this.pos.copy(),
+                        velocity: p5.Vector.random2D().mult(2),
+                        size: this.size
+                    };
+                }
+                
+                if (this.movement.movement && !this.movement.movement.velocity) {
+                    this.movement.movement.velocity = p5.Vector.random2D().mult(2);
+                }
+            }
         } catch (error) {
             console.error(`Erro ao inicializar sistema de movimento: ${error.message}`);
-            // Tenta um fallback se disponível
-            if (typeof window.BacteriaMovement === 'function') {
-                this.movement = new window.BacteriaMovement(this);
-            }
+            // Criar um sistema de movimento básico como fallback
+            this.movement = {
+                movement: {
+                    position: this.pos.copy(),
+                    velocity: p5.Vector.random2D().mult(2)
+                },
+                update: function() {
+                    // Movimento simples para garantir que a bactéria se mova
+                    this.movement.position.add(this.movement.velocity);
+                }
+            };
         }
         
         // Inicializa gerenciador de estados (verificando se existe)
@@ -61,16 +114,19 @@ class Bacteria extends BacteriaBase {
         }
         
         // Inicializa em estado específico se fornecido
-        if (initialState && this.stateManager && typeof this.stateManager.setCurrentState === 'function') {
-            this.stateManager.setCurrentState(initialState);
+        if (this.initialState && this.stateManager && typeof this.stateManager.setCurrentState === 'function') {
+            this.stateManager.setCurrentState(this.initialState);
         }
 
         // Configurar energia inicial se fornecida
-        if (initialEnergy !== undefined && this.stateManager) {
-            this.stateManager.currentEnergy = initialEnergy;
+        if (this.initialEnergy !== undefined && this.stateManager) {
+            this.stateManager.currentEnergy = this.initialEnergy;
         }
         
-        console.log(`Bactéria criada: ID=${this.id}, Sexo=${this.isFemale ? 'Feminino' : 'Masculino'}, Estado=${this.stateManager ? this.stateManager.currentState : 'não definido'}`);
+        // Verifica posição novamente antes de finalizar construção
+        this.validateAndFixPosition();
+        
+        console.log(`Bactéria criada: ID=${this.id}, Sexo=${this.isFemale ? 'Feminino' : 'Masculino'}, Posição=(${this.pos.x.toFixed(2)}, ${this.pos.y.toFixed(2)}), Estado=${this.stateManager ? this.stateManager.currentState : 'não definido'}`);
     }
     
     /**
@@ -139,21 +195,12 @@ class Bacteria extends BacteriaBase {
     }
     
     /**
-     * Atualiza o estado da bactéria
-     * @param {number} deltaTime - Tempo desde o último frame
+     * Analisa o ambiente da bactéria
      */
-    update(deltaTime = 1) {
+    analyzeEnvironment() {
         try {
-            // Atualiza idade
-            this.age += deltaTime;
-
-            // Verifica se está morta
-            if (this.isDead()) {
-                return;
-            }
-
             // Análise do ambiente atual
-            let environmentConditions = {};
+            this.environmentConditions = {};
             if (this.environment && typeof this.environment.analyzeEnvironment === 'function') {
                 // Obtém referências globais para entidades do ambiente, se disponíveis
                 const food = window.simulationInstance?.foodManager?.getFoodArray() || [];
@@ -162,7 +209,7 @@ class Bacteria extends BacteriaBase {
                 const entities = window.simulationInstance?.entityManager?.getBacteria() || [];
                 
                 // Analisa o ambiente com todas as entidades para identificação
-                environmentConditions = this.environment.analyzeEnvironment(
+                this.environmentConditions = this.environment.analyzeEnvironment(
                     food, 
                     predators, 
                     obstacles, 
@@ -171,35 +218,43 @@ class Bacteria extends BacteriaBase {
                 
                 // Log de informações sobre entidades identificadas a cada 300 frames
                 if (this.age % 300 === 0) {
-                    const nearbyBacteria = environmentConditions.nearbyBacteria?.length || 0;
-                    const sameSpecies = environmentConditions.sameSpeciesBacteria?.length || 0;
-                    const differentSpecies = environmentConditions.differentSpeciesBacteria?.length || 0;
-                    const identifiedObstacles = environmentConditions.identifiedObstacles?.length || 0;
+                    const nearbyBacteria = this.environmentConditions.nearbyBacteria?.length || 0;
+                    const sameSpecies = this.environmentConditions.sameSpeciesBacteria?.length || 0;
+                    const differentSpecies = this.environmentConditions.differentSpeciesBacteria?.length || 0;
+                    const identifiedObstacles = this.environmentConditions.identifiedObstacles?.length || 0;
                     
                     console.log(`Bactéria ${this.id} - Identificou: ${nearbyBacteria} bactérias (${sameSpecies} mesma espécie, ${differentSpecies} diferente), ${identifiedObstacles} obstáculos`);
                 }
             } else {
                 console.warn(`Sistema de ambiente não inicializado para a bactéria ${this.id}`);
-                environmentConditions = { foodNearby: false, mateNearby: false, predatorNearby: false };
+                this.environmentConditions = { foodNearby: false, mateNearby: false, predatorNearby: false };
             }
+        } catch (error) {
+            console.error(`Erro ao analisar ambiente para bactéria ${this.id}:`, error);
+            this.environmentConditions = { foodNearby: false, mateNearby: false, predatorNearby: false };
+        }
+    }
 
+    /**
+     * Toma decisões com base no ambiente
+     */
+    makeDecision() {
+        try {
             // Determina a próxima ação
             let action = 'explore'; // Ação padrão
             
             // Usa aprendizado neural para decisão se disponível
             if (this.learning && typeof this.learning.decideAction === 'function') {
-                const decision = this.learning.decideAction(environmentConditions);
+                const decision = this.learning.decideAction(this.environmentConditions);
                 action = decision.action || 'explore';
-                
+
                 // Atualiza os parâmetros de movimento com base na decisão neural
                 if (decision.movementParams) {
-                    environmentConditions.movementParams = decision.movementParams;
+                    this.environmentConditions.movementParams = decision.movementParams;
                 }
             }
             
-            if (this.stateManager && typeof this.stateManager.update === 'function') {
-                // Usa o gerenciador de estados avançado
-                
+            if (this.stateManager && typeof this.stateManager.setCurrentState === 'function') {
                 // Mapeia a ação para o estado correspondente
                 switch (action) {
                     case 'seekFood':
@@ -217,80 +272,365 @@ class Bacteria extends BacteriaBase {
                         break;
                 }
                 
-                // Atualiza o gerenciador de estados
-                this.stateManager.update(environmentConditions);
+                // Atualiza o gerenciador de estados com as condições ambientais
+                if (typeof this.stateManager.update === 'function') {
+                    this.stateManager.update(this.environmentConditions);
+                }
             } else {
                 console.warn(`Sistema de estados não inicializado para a bactéria ${this.id}`);
             }
-            
-            // Determina as ações de movimento com base na ação escolhida
-            const stateInfo = {
-                state: this.stateManager ? this.stateManager.currentState : 'exploring',
-                shouldMove: true, // Por padrão, as bactérias devem se mover
-                targetType: 'random',
-                speedMultiplier: 1.0
-            };
-            
-            // Ajusta os parâmetros de movimento com base na ação
-            if (action === 'seekFood' && environmentConditions.foodTarget) {
-                stateInfo.targetType = 'food';
-                stateInfo.target = environmentConditions.foodTarget;
-                stateInfo.speedMultiplier = 1.2;
-            } else if (action === 'seekMate' && environmentConditions.mateTarget) {
-                stateInfo.targetType = 'mate';
-                stateInfo.target = environmentConditions.mateTarget;
-                stateInfo.speedMultiplier = 0.8;
-            } else if (action === 'rest') {
-                stateInfo.shouldMove = false;
-            } else if (environmentConditions.predatorNearby) {
-                // Sempre prioriza fuga de predadores
-                stateInfo.targetType = 'escape';
-                stateInfo.target = environmentConditions.predatorTarget;
-                stateInfo.speedMultiplier = 1.5;
+        } catch (error) {
+            console.error(`Erro ao tomar decisão para bactéria ${this.id}:`, error);
+        }
+    }
+
+    /**
+     * Atualiza a bactéria
+     * @param {number} deltaTime - Tempo desde o último frame
+     */
+    update(deltaTime = 1) {
+        // Incrementar idade
+        this.age += deltaTime;
+        
+        // Validar propriedades para evitar erros
+        this.validarPropriedades("inicio update");
+        
+        try {
+            // Atualiza a visualização da bactéria
+            if (this.visualization && typeof this.visualization.update === 'function') {
+                this.visualization.update();
             }
             
-            // Atualiza o movimento usando o módulo de movimento aprimorado
-            if (this.movement && typeof this.movement.update === 'function') {
-                // Aplica comportamentos específicos para bactérias e obstáculos identificados
-                if (environmentConditions.nearbyBacteria?.length > 0 || 
-                    environmentConditions.identifiedObstacles?.length > 0) {
-                    
-                    // Ajusta o comportamento conforme a presença de outras entidades
-                    this.adjustBehavior(stateInfo, environmentConditions);
+            // Analisa o ambiente
+            this.analyzeEnvironment();
+            
+            // Método de depuração para verificar se o movimento está inicializado
+            if (!this.movement) {
+                console.error(`Bactéria ${this.id} sem sistema de movimento. Inicializando...`);
+                this.movement = new BacteriaMovement(this);
+                
+                if (!this.movement) {
+                    console.error(`Falha ao criar movimento para bactéria ${this.id}. Usando fallback.`);
+                    // Cria um objeto mínimo para evitar erros
+                    this.movement = {
+                        moveRandom: (dt, speed) => {
+                            // Movimento simples como fallback
+                            const randomStep = p5.Vector.random2D().mult(speed * 2);
+                            this.pos.add(randomStep);
+                        }
+                    };
+                }
+            }
+            
+            // Processa o comportamento baseado em IA (se disponível)
+            if (this.stateManager && this.learning) {
+                // Obtém as condições do ambiente
+                let conditions = {};
+                if (this.environment) {
+                    if (typeof this.environment.analyzeEnvironment === 'function') {
+                        conditions = this.environment.analyzeEnvironment();
+                    } else {
+                        // Fallback: cria um objeto de condições vazio para evitar erros
+                        console.warn(`Bactéria ${this.id}: método analyzeEnvironment não encontrado`);
+                        conditions = {
+                            nearestFood: null,
+                            nearestMate: null,
+                            nearestPredator: null,
+                            isSafe: true,
+                            foundFood: false,
+                            reproduced: false,
+                            predatorNearby: false
+                        };
+                    }
                 }
                 
-                // Atualiza o movimento com as condições ambientais e informações de estado
-                this.movement.update(stateInfo, environmentConditions, deltaTime);
+                // Utiliza IA para decidir a próxima ação
+                const actionResult = this.learning.decideAction(conditions);
+                
+                // Atualiza o gerenciador de estados com a decisão da IA
+                const stateInfo = this.stateManager.update(conditions, actionResult);
+                
+                // Processa o movimento com base no estado e nos parâmetros de movimento
+                this.processMovement(stateInfo, conditions, deltaTime);
+                
+                // Verifica se consumo de energia está funcionando corretamente
+                if (frameCount % 60 === 0) {
+                    console.log(`Bactéria ${this.id}: Estado=${stateInfo.state}, Energia=${this.stateManager.currentEnergy.toFixed(1)}`);
+                }
             } else {
-                // Se o movimento não estiver disponível, tenta um movimento básico
-                this.basicMove(deltaTime);
+                // Se não tiver IA ou gerenciador de estados, usa movimento aleatório simples
+                console.log(`Bactéria ${this.id} sem IA ou gerenciador de estados, usando movimento aleatório básico`);
+                this.movement.moveRandom(deltaTime, 1.0);
             }
             
-            // Atualiza o sistema de reprodução, se disponível
-            if (this.reproduction && typeof this.reproduction.update === 'function') {
-                const childDNA = this.reproduction.update();
-                
-                // Se for gerado um DNA filho, informa ao sistema de simulação
-                if (childDNA && this.onReproduction) {
-                    this.onReproduction(childDNA);
+            // Aplica confinamento aos limites da tela
+            if (this.movement && typeof this.movement.constrainToBounds === 'function') {
+                this.movement.constrainToBounds();
+            } else {
+                // Método de fallback para manter a bactéria dentro dos limites
+                this.constrainToBounds();
+            }
+            
+            // Garantir que a posição é válida após a atualização
+            this.validarPropriedades("fim update");
+            
+        } catch (error) {
+            console.error(`Erro crítico ao atualizar bactéria ${this.id}:`, error);
+            // Em caso de erro, tenta um movimento básico para evitar congelamento
+            if (this.pos) {
+                const randomMove = p5.Vector.random2D().mult(2);
+                this.pos.add(randomMove);
+                this.constrainToBounds();
+            }
+        }
+    }
+    
+    /**
+     * Método de fallback para manter a bactéria dentro dos limites da tela
+     */
+    constrainToBounds() {
+        if (!this.pos) return;
+        
+        try {
+            const worldWidth = typeof width !== 'undefined' ? width : 800;
+            const worldHeight = typeof height !== 'undefined' ? height : 600;
+            const radius = this.size / 2 || 10;
+            
+            // Restringe às coordenadas válidas
+            if (this.pos.x < radius) this.pos.x = radius;
+            if (this.pos.x > worldWidth - radius) this.pos.x = worldWidth - radius;
+            if (this.pos.y < radius) this.pos.y = radius;
+            if (this.pos.y > worldHeight - radius) this.pos.y = worldHeight - radius;
+        } catch (error) {
+            console.error(`Erro ao aplicar constrainToBounds:`, error);
+        }
+    }
+    
+    /**
+     * Processa o movimento da bactéria baseado nos parâmetros de movimento
+     * @param {Object} stateInfo - Informações do estado atual
+     * @param {Object} conditions - Condições do ambiente
+     * @param {number} deltaTime - Tempo desde o último frame
+     */
+    processMovement(stateInfo, conditions, deltaTime = 1) {
+        if (!this.movement) {
+            console.error(`Bactéria ${this.id} sem sistema de movimento em processMovement`);
+            return;
+        }
+        
+        console.log(`Processando movimento da bactéria ${this.id}: estado=${stateInfo.state}`);
+        
+        // Obtém os parâmetros de movimento atuais
+        const params = stateInfo.movementParams || {
+            speed: 1.0,
+            targetWeight: 0.5
+        };
+        
+        // Não move se estiver descansando
+        if (stateInfo.state === 'resting') {
+            // Mesmo em descanso, aplica pequenos movimentos para parecer mais natural
+            this.movement.moveRandom(deltaTime, 0.1);
+            return;
+        }
+        
+        // Estado de busca por comida
+        if ((stateInfo.state === 'seekingFood' || stateInfo.state === 'seekFood') && conditions.nearestFood) {
+            const targetWeight = params.targetWeight || 0.5;
+            
+            // Combina movimento aleatório com movimento direcionado baseado no peso do alvo
+            if (random() < targetWeight) {
+                this.movement.moveTowards(conditions.nearestFood, deltaTime, params.speed || 1.0);
+            } else {
+                this.movement.moveRandom(deltaTime, params.speed || 1.0);
+            }
+        }
+        // Estado de busca por parceiro
+        else if ((stateInfo.state === 'seekingMate' || stateInfo.state === 'seekMate') && conditions.nearestMate) {
+            const targetWeight = params.targetWeight || 0.5;
+            
+            // Combina movimento aleatório com movimento direcionado baseado no peso do alvo
+            if (random() < targetWeight) {
+                this.movement.moveTowards(conditions.nearestMate, deltaTime, params.speed || 1.0);
+            } else {
+                this.movement.moveRandom(deltaTime, params.speed || 1.0);
+            }
+        }
+        // Estado de fuga
+        else if (stateInfo.state === 'fleeing' && conditions.nearestPredator) {
+            // Cria um vetor na direção oposta ao predador
+            const awayVector = createVector(
+                this.pos.x - conditions.nearestPredator.x,
+                this.pos.y - conditions.nearestPredator.y
+            );
+            
+            // Normaliza e escala pela velocidade
+            awayVector.normalize();
+            awayVector.mult(100); // Fuga é mais rápida
+            
+            const escapePosInOppositeDirection = createVector(
+                this.pos.x + awayVector.x,
+                this.pos.y + awayVector.y
+            );
+            
+            // Move-se para a posição oposta
+            this.movement.moveTowards(escapePosInOppositeDirection, deltaTime, params.speed * 1.5);
+        }
+        // Estado de exploração ou padrão
+        else {
+            // Movimento aleatório para exploração
+            this.movement.moveRandom(deltaTime, params.speed || 1.0);
+            
+            if (frameCount % 120 === 0) {
+                console.log(`Bactéria ${this.id} movendo-se aleatoriamente: velocidade=${params.speed}`);
+            }
+        }
+    }
+    
+    /**
+     * Valida e corrige a posição da bactéria se necessário
+     */
+    validateAndFixPosition() {
+        // Verifica se a posição existe
+        if (!this.pos) {
+            console.warn(`Bactéria ${this.id} sem posição, criando nova`);
+            this.resetPosition();
+            return;
+        }
+        
+        // Verifica se pos.x é um objeto (erro comum)
+        if (typeof this.pos.x === 'object') {
+            console.warn(`Erro: this.pos.x é um objeto para bactéria ${this.id}:`, this.pos.x);
+            
+            // Tenta extrair x.x se disponível
+            if (this.pos.x && typeof this.pos.x.x === 'number') {
+                this.pos = {
+                    x: this.pos.x.x,
+                    y: (typeof this.pos.y === 'number' && !isNaN(this.pos.y)) ? this.pos.y : height/2
+                };
+                console.log(`Posição corrigida para bactéria ${this.id}:`, this.pos);
+            } else {
+                // Não foi possível recuperar, reseta posição
+                this.resetPosition();
+            }
+            return;
+        }
+        
+        // Verifica se as coordenadas são números válidos
+        if (isNaN(this.pos.x) || isNaN(this.pos.y) || 
+            !isFinite(this.pos.x) || !isFinite(this.pos.y)) {
+            console.warn(`Posição inválida para bactéria ${this.id}: (${this.pos.x}, ${this.pos.y}), corrigindo`);
+            this.resetPosition();
+        }
+    }
+    
+    /**
+     * Reseta a posição da bactéria para uma posição válida dentro dos limites do mundo
+     */
+    resetPosition() {
+        try {
+            console.log(`Resetando posição da bactéria ${this.id}`);
+            
+            // Determina dimensões do mundo
+            const worldWidth = width || 800;
+            const worldHeight = height || 600;
+            
+            // Gera coordenadas seguras
+            const safeX = Math.floor(random(worldWidth * 0.1, worldWidth * 0.9));
+            const safeY = Math.floor(random(worldHeight * 0.1, worldHeight * 0.9));
+            
+            // Usa createVector se disponível (p5.js)
+            if (typeof createVector === 'function') {
+                try {
+                    this.pos = createVector(safeX, safeY);
+                    console.log(`Nova posição criada com createVector: (${this.pos.x}, ${this.pos.y})`);
+                } catch (e) {
+                    // Fallback para objeto simples se createVector falhar
+                    this.pos = { x: safeX, y: safeY };
+                    console.log(`Fallback para objeto simples: (${this.pos.x}, ${this.pos.y})`);
                 }
+            } else {
+                // Cria objeto simples se createVector não estiver disponível
+                this.pos = { x: safeX, y: safeY };
+                console.log(`Posição criada com objeto simples: (${this.pos.x}, ${this.pos.y})`);
             }
             
-            // Reduz gradualmente a energia
-            if (this.states && typeof this.states.removeEnergy === 'function') {
-                this.states.removeEnergy(0.05 * deltaTime);
-            }
-            
-            // Válida e corrige propriedades após a atualização
-            this.validarPropriedades("update");
-            
-            // Log de debug a cada 60 frames para verificar movimento
-            if (frameCount % 60 === 0) {
-                console.log(`Bactéria ${this.id}: pos=${this.pos.x.toFixed(1)},${this.pos.y.toFixed(1)}, 
-                            state=${this.stateManager ? this.stateManager.currentState : 'unknown'}`);
+            // Verificação final
+            if (!this.pos || isNaN(this.pos.x) || isNaN(this.pos.y)) {
+                console.error(`FALHA ao resetar posição para bactéria ${this.id}, usando fallback absoluto`);
+                this.pos = { x: worldWidth/2, y: worldHeight/2 };
             }
         } catch (error) {
-            console.error("Erro no update da bactéria:", error, this);
+            console.error(`Erro crítico ao resetar posição: ${error}`);
+            // Último recurso absoluto
+            this.pos = { x: 400, y: 300 };
+        }
+    }
+    
+    /**
+     * Reseta a bactéria para um estado seguro em caso de erro grave
+     */
+    resetToSafeState() {
+        try {
+            // Reseta posição
+            this.resetPosition();
+            
+            // Reseta velocidade
+            if (!this.vel || typeof this.vel !== 'object') {
+                const angle = random(TWO_PI);
+                this.vel = { 
+                    x: cos(angle) * 3,
+                    y: sin(angle) * 3
+                };
+                
+                // Adiciona métodos de vetor se não existirem
+                if (typeof this.vel.add !== 'function') {
+                    this.vel.add = function(v) { 
+                        this.x += v.x; 
+                        this.y += v.y; 
+                        return this; 
+                    };
+                }
+                
+                if (typeof this.vel.limit !== 'function') {
+                    this.vel.limit = function(max) {
+                        const mSq = this.x * this.x + this.y * this.y;
+                        if (mSq > max * max) {
+                            const norm = max / Math.sqrt(mSq);
+                            this.x *= norm;
+                            this.y *= norm;
+                        }
+                        return this;
+                    };
+                }
+            }
+            
+            // Garante que a energia não é negativa
+            if (this.energy < 0) this.energy = 20;
+            
+            console.log(`Bactéria ${this.id} restaurada para estado seguro`);
+        } catch (error) {
+            console.error(`Falha ao resetar para estado seguro: ${error}`);
+        }
+    }
+    
+    /**
+     * Verifica colisão com as bordas do mundo e faz ricochete
+     */
+    checkBoundaryCollision() {
+        if (!this.world || !this.pos || !this.vel) return;
+        
+        // Colisão com as bordas horizontais
+        if (this.pos.x < 0 || this.pos.x > this.world.width) {
+            this.vel.x *= -1; // Inverte velocidade horizontal
+            // Corrige posição para dentro dos limites
+            this.pos.x = constrain(this.pos.x, 0, this.world.width);
+        }
+        
+        // Colisão com as bordas verticais
+        if (this.pos.y < 0 || this.pos.y > this.world.height) {
+            this.vel.y *= -1; // Inverte velocidade vertical
+            // Corrige posição para dentro dos limites
+            this.pos.y = constrain(this.pos.y, 0, this.world.height);
         }
     }
     
@@ -601,146 +941,196 @@ class Bacteria extends BacteriaBase {
     }
 
     /**
-     * Processa o comportamento da bactéria
-     * @param {number} deltaTime - Tempo desde o último frame
+     * Verifica se a posição é válida
+     * @returns {boolean} - True se a posição for válida
      */
-    processBehavior(deltaTime = 1) {
+    isPosValid() {
+        return this.pos && 
+               typeof this.pos.x === 'number' && 
+               typeof this.pos.y === 'number' && 
+               !isNaN(this.pos.x) && 
+               !isNaN(this.pos.y) &&
+               isFinite(this.pos.x) &&
+               isFinite(this.pos.y);
+    }
+    
+    /**
+     * Verifica se a velocidade é válida
+     * @returns {boolean} - True se a velocidade for válida
+     */
+    isVelValid() {
+        return this.vel && 
+               typeof this.vel.x === 'number' && 
+               typeof this.vel.y === 'number' && 
+               !isNaN(this.vel.x) && 
+               !isNaN(this.vel.y) &&
+               isFinite(this.vel.x) &&
+               isFinite(this.vel.y) &&
+               typeof this.vel.add === 'function';
+    }
+    
+    /**
+     * Inicializa as propriedades físicas da bactéria
+     * @param {Object} params - Parâmetros de inicialização
+     * @param {number} params.x - Posição X inicial
+     * @param {number} params.y - Posição Y inicial
+     * @param {Object} params.world - Referência ao mundo
+     */
+    initPhysics(params = {}) {
         try {
-            // Se não tiver aprendizado ou movimento, não pode processar comportamento
-            if (!this.learning || !this.movement) {
-                console.warn("Bacteria sem módulos de aprendizado ou movimento");
-                return;
+            // Converte parâmetros para números e valida
+            let x = params.x;
+            let y = params.y;
+            
+            // Verifica se parâmetros são números válidos
+            if (typeof x !== 'number' || isNaN(x) || !isFinite(x)) {
+                console.warn(`Bactéria ${this.id}: X inicial inválido (${x}), usando valor padrão`);
+                x = (width || 800) / 2;
             }
             
-            // Obtém as condições do ambiente
-            const conditions = this.environment.analyzeEnvironment();
+            if (typeof y !== 'number' || isNaN(y) || !isFinite(y)) {
+                console.warn(`Bactéria ${this.id}: Y inicial inválido (${y}), usando valor padrão`);
+                y = (height || 600) / 2;
+            }
             
-            // Utiliza IA para decidir a próxima ação
-            const actionResult = this.learning.decideAction(conditions);
+            // Garante que as coordenadas estão dentro dos limites válidos
+            const worldWidth = params.world?.width || width || 800;
+            const worldHeight = params.world?.height || height || 600;
             
-            // Atualiza o gerenciador de estados com a decisão da IA
-            const stateInfo = this.stateManager.update(conditions, actionResult);
+            x = constrain(x, 10, worldWidth - 10);
+            y = constrain(y, 10, worldHeight - 10);
             
-            // Processa o movimento com base nos parâmetros contínuos
-            this.processMovement(stateInfo, conditions, deltaTime);
+            // Verifica se já temos uma posição e precisamos apenas corrigir
+            if (this.pos) {
+                // Verifica se pos.x é um objeto (caso problemático)
+                if (typeof this.pos.x === 'object') {
+                    console.warn(`Bactéria ${this.id}: pos.x é um objeto, corrigindo`, this.pos.x);
+                    
+                    // Tenta extrair x.x se disponível
+                    if (this.pos.x && typeof this.pos.x.x === 'number') {
+                        x = this.pos.x.x;
+                    }
+                    
+                    // Recria o objeto pos
+                    this.pos = typeof createVector === 'function' 
+                        ? createVector(x, y)
+                        : { x, y };
+                } else {
+                    // Atualiza as coordenadas existentes se forem válidas
+                    this.pos.x = x;
+                    this.pos.y = y;
+                }
+            } else {
+                // Cria um vetor p5.js para a posição se não existir
+                this.pos = typeof createVector === 'function' 
+                    ? createVector(x, y)
+                    : { x, y };
+            }
             
-            // Recompensa a bactéria com base no resultado de suas ações
-            this.applyRewards(conditions);
+            // Verificação adicional para garantir que pos.x e pos.y são números
+            if (typeof this.pos.x !== 'number' || typeof this.pos.y !== 'number' ||
+                isNaN(this.pos.x) || isNaN(this.pos.y)) {
+                console.error(`Bactéria ${this.id}: Posição ainda contém valores inválidos após correção, recriando`);
+                
+                // Último recurso - cria um objeto literal simples
+                this.pos = { 
+                    x: x,
+                    y: y
+                };
+            }
+            
+            // Define mundo e tamanho
+            this.world = params.world || { width: worldWidth, height: worldHeight };
+            this.size = params.size || 20;
+            
+            // Inicializa ou corrige a velocidade
+            this.initializeVelocity();
+            
+            // Aceleração (inicialmente zero)
+            this.acc = typeof createVector === 'function' 
+                ? createVector(0, 0) 
+                : { x: 0, y: 0 };
+            
+            // Verifica novamente se todos os vetores são válidos
+            const isValid = this.isPosValid() && this.isVelValid();
+            
+            // Logs
+            if (isValid) {
+                console.log(`Bactéria ${this.id} inicializada com sucesso: pos=(${this.pos.x.toFixed(2)}, ${this.pos.y.toFixed(2)}), vel=(${this.vel.x.toFixed(2)}, ${this.vel.y.toFixed(2)})`);
+            } else {
+                console.error(`ERRO: Bactéria ${this.id} não foi inicializada corretamente`);
+                this.resetPosition();
+                this.initializeVelocity();
+            }
         } catch (error) {
-            console.error("Erro ao processar comportamento:", error);
+            console.error(`Erro crítico ao inicializar física da bactéria ${this.id}:`, error);
+            
+            // Garante valores padrão em caso de erro
+            const worldWidth = width || 800;
+            const worldHeight = height || 600;
+            
+            this.pos = {
+                x: random(worldWidth * 0.1, worldWidth * 0.9),
+                y: random(worldHeight * 0.1, worldHeight * 0.9)
+            };
+            this.initializeVelocity();
         }
     }
-
+    
     /**
-     * Processa o movimento da bactéria baseado nos parâmetros de movimento
-     * @param {Object} stateInfo - Informações do estado atual
-     * @param {Object} conditions - Condições do ambiente
-     * @param {number} deltaTime - Tempo desde o último frame
+     * Inicializa ou corrige a velocidade da bactéria
      */
-    processMovement(stateInfo, conditions, deltaTime = 1) {
-        // Não move se estiver descansando
-        if (stateInfo.state === 'resting') {
-            // Mesmo em descanso, aplica pequenos movimentos para parecer mais natural
-            this.movement.moveRandom(deltaTime, 0.1);
-            return;
+    initializeVelocity() {
+        const angle = random(TWO_PI);
+        const initialSpeed = 3.0;
+        
+        // Tenta criar usando p5.Vector
+        if (typeof createVector === 'function') {
+            this.vel = createVector(cos(angle) * initialSpeed, sin(angle) * initialSpeed);
+            
+            // Verifica se p5.Vector foi criado corretamente
+            if (!this.vel || typeof this.vel.add !== 'function') {
+                // Fallback para objeto literal com métodos
+                this.vel = this.createVectorLike(cos(angle) * initialSpeed, sin(angle) * initialSpeed);
+            }
+        } else {
+            // Cria objeto literal com métodos vetoriais
+            this.vel = this.createVectorLike(cos(angle) * initialSpeed, sin(angle) * initialSpeed);
         }
         
-        // Obtém os parâmetros de movimento atuais
-        const params = stateInfo.movementParams;
-        
-        // Estado de busca por comida
-        if ((stateInfo.state === 'seekingFood' || stateInfo.state === 'seekFood') && conditions.nearestFood) {
-            const targetWeight = params.targetWeight || 0.5;
-            
-            // Combina movimento aleatório com movimento direcionado baseado no peso do alvo
-            if (random() < targetWeight) {
-                this.movement.moveTowards(conditions.nearestFood, deltaTime, params.speed || 1.0);
-            } else {
-                this.movement.moveRandom(deltaTime, params.speed || 1.0);
-            }
-        }
-        // Estado de busca por parceiro
-        else if ((stateInfo.state === 'seekingMate' || stateInfo.state === 'seekMate') && conditions.nearestMate) {
-            const targetWeight = params.targetWeight || 0.5;
-            
-            // Combina movimento aleatório com movimento direcionado baseado no peso do alvo
-            if (random() < targetWeight) {
-                this.movement.moveTowards(conditions.nearestMate, deltaTime, params.speed || 1.0);
-            } else {
-                this.movement.moveRandom(deltaTime, params.speed || 1.0);
-            }
-        }
-        // Estado de fuga
-        else if (stateInfo.state === 'fleeing' && conditions.nearestPredator) {
-            // Cria um vetor na direção oposta ao predador
-            const awayVector = createVector(
-                this.pos.x - conditions.nearestPredator.x,
-                this.pos.y - conditions.nearestPredator.y
-            );
-            
-            // Normaliza e escala pela velocidade
-            awayVector.normalize();
-            awayVector.mult(2.0); // Fuga é mais rápida
-            
-            const escapePosInOppositeDirection = createVector(
-                this.pos.x + awayVector.x * 50,
-                this.pos.y + awayVector.y * 50
-            );
-            
-            // Move-se para a posição oposta
-            this.movement.moveTowards(escapePosInOppositeDirection, deltaTime, params.speed * 1.5);
-        }
-        // Estado de exploração
-        else if (stateInfo.state === 'exploring' || stateInfo.state === 'explore') {
-            // Aplica os parâmetros de movimento contínuo do sistema neural
-            this.movement.moveRandom(deltaTime, params.speed || 1.0);
-        }
-        else {
-            // Para qualquer outro estado, usa movimento aleatório com velocidade média
-            this.movement.moveRandom(deltaTime, 0.5);
+        // Verificação final
+        if (!this.vel || typeof this.vel.x !== 'number' || typeof this.vel.y !== 'number' ||
+            isNaN(this.vel.x) || isNaN(this.vel.y)) {
+            console.error(`Bactéria ${this.id}: Falha ao criar velocidade, usando valores fixos`);
+            this.vel = this.createVectorLike(cos(angle) * initialSpeed, sin(angle) * initialSpeed);
         }
     }
-
+    
     /**
-     * Aplica recompensas com base nas ações da bactéria
-     * @param {Object} conditions - Condições do ambiente
+     * Cria um vetor semelhante ao p5.Vector quando necessário
      */
-    applyRewards(conditions) {
-        if (!this.learning) return;
-        
-        let reward = 0;
-        
-        // Recompensa por encontrar comida
-        if (conditions.foundFood) {
-            reward += 1.0;
-        }
-        
-        // Recompensa por se reproduzir
-        if (conditions.reproduced) {
-            reward += 1.5;
-        }
-        
-        // Recompensa por fugir de predador
-        if (conditions.escapedPredator) {
-            reward += 1.0;
-        }
-        
-        // Recompensa por sobreviver com saúde alta
-        if (this.health > 80) {
-            reward += 0.1;
-        }
-        
-        // Penalidade por saúde baixa
-        if (this.health < 30) {
-            reward -= 0.2;
-        }
-        
-        // Aplica a recompensa final ao sistema de aprendizado
-        if (reward !== 0) {
-            this.learning.applyReward(reward);
-        }
+    createVectorLike(x, y) {
+        return typeof createVector === 'function' ? createVector(x, y) : { x, y };
     }
 }
 
-// Exporta a classe para uso global
-window.Bacteria = Bacteria; 
+// Exporta a classe Bacteria para o escopo global
+window.Bacteria = Bacteria;
+console.log('✅ Classe Bacteria exportada para o escopo global');
+
+// Log para garantir que a classe está disponível
+setTimeout(() => {
+    console.log(`🔍 Verificando classe Bacteria no escopo global: ${typeof window.Bacteria}`);
+    
+    // Tenta criar uma instância para verificar se o construtor está funcionando
+    try {
+        const testBacteria = new window.Bacteria({
+            x: 100,
+            y: 100,
+            isFemale: true
+        });
+        console.log(`✅ Teste de criação de Bacteria bem-sucedido: ${!!testBacteria}`);
+    } catch (error) {
+        console.error(`❌ ERRO ao criar instância de teste de Bacteria:`, error);
+    }
+}, 2000); 

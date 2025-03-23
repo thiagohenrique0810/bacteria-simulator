@@ -22,7 +22,7 @@ function calculateAngle(x1, y1, x2, y2) {
  * @param {number} degrees - Ângulo em graus
  * @returns {number} - Ângulo em radianos
  */
-function radians(degrees) {
+function degreesToRadians(degrees) {
     return degrees * Math.PI / 180;
 }
 
@@ -31,7 +31,7 @@ function radians(degrees) {
  * @param {number} radians - Ângulo em radianos
  * @returns {number} - Ângulo em graus
  */
-function degrees(radians) {
+function radiansToDegrees(radians) {
     return radians * 180 / Math.PI;
 }
 
@@ -133,8 +133,8 @@ class SpatialGrid {
 
 // Exporta as funções
 window.calculateAngle = calculateAngle;
-window.radians = radians;
-window.degrees = degrees;
+window.degreesToRadians = degreesToRadians;
+window.radiansToDegrees = radiansToDegrees;
 window.randomColor = randomColor;
 
 // Exporta classe para o escopo global

@@ -9,17 +9,16 @@ class CommunicationSystem {
     constructor(simulation) {
         this.simulation = simulation;
         
-        // Inicializa componentes
+        // Inicializa componentes de utilidades primeiro 
         this.utils = new CommunicationUtils();
-        this.interfaceManager = new CommunicationInterface(this.messageManager);
+        
+        // Inicializa gerenciador de mensagens com referência para o sistema
         this.messageManager = new MessageManager(this);
+        
+        // Inicializa outros componentes na ordem correta
+        this.interfaceManager = new CommunicationInterface(this.messageManager);
         this.messageGenerator = new MessageGenerator(this);
         this.relationshipManager = new RelationshipManager(this);
-        
-        // Corrige referência cíclica (o messageManager precisa do interfaceManager)
-        if (this.messageManager) {
-            this.messageManager.communicationSystem = this;
-        }
         
         // Estatísticas do sistema de comunicação
         this.stats = {
@@ -37,6 +36,9 @@ class CommunicationSystem {
         this.useNeuralCommunication = window.NeuralCommunication !== undefined;
         
         console.log("Sistema de comunicação inicializado");
+        
+        // Verifica se todos os componentes foram inicializados corretamente
+        this.validateComponents();
         
         // Adiciona as relações de comunicação nas estatísticas
         if (simulation && simulation.stats) {
@@ -258,6 +260,33 @@ class CommunicationSystem {
      */
     setRandomMessageChance(chance) {
         this.randomMessageChance = chance;
+    }
+    
+    /**
+     * Verifica se todos os componentes foram inicializados corretamente
+     */
+    validateComponents() {
+        // Verifica se o messageManager foi inicializado corretamente
+        if (!this.messageManager) {
+            console.warn("MessageManager não inicializado corretamente");
+        } else {
+            this.messageManager.communicationSystem = this;
+        }
+        
+        // Verifica se o interfaceManager foi inicializado corretamente
+        if (!this.interfaceManager) {
+            console.warn("CommunicationInterface não inicializado corretamente");
+        }
+        
+        // Verifica se o messageGenerator foi inicializado corretamente
+        if (!this.messageGenerator) {
+            console.warn("MessageGenerator não inicializado corretamente");
+        }
+        
+        // Verifica se o relationshipManager foi inicializado corretamente
+        if (!this.relationshipManager) {
+            console.warn("RelationshipManager não inicializado corretamente");
+        }
     }
 }
 

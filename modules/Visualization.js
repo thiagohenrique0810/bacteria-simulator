@@ -206,27 +206,36 @@ class SimulationVisualization {
         
         this.lastStatUpdate = frameCount;
         
+        // Verifica se entityManager está disponível
+        if (!this.simulation || !this.simulation.entityManager) {
+            return;
+        }
+        
         // Adiciona dados atuais aos gráficos
-        this.statsGraphs.population.data.push(this.simulation.bacteria.length);
-        this.statsGraphs.predators.data.push(this.simulation.predators.length);
-        this.statsGraphs.food.data.push(this.simulation.food.length);
+        this.statsGraphs.population.data.push(this.simulation.entityManager.bacteria.length);
+        this.statsGraphs.predators.data.push(this.simulation.entityManager.predators.length);
+        this.statsGraphs.food.data.push(this.simulation.entityManager.food.length);
         
         // Calcula saúde média
         let totalHealth = 0;
-        for (let bacteria of this.simulation.bacteria) {
-            totalHealth += bacteria.health;
+        for (let bacteria of this.simulation.entityManager.bacteria) {
+            totalHealth += bacteria.health || 0;
         }
-        const avgHealth = this.simulation.bacteria.length > 0 ? 
-            totalHealth / this.simulation.bacteria.length : 0;
+        const avgHealth = this.simulation.entityManager.bacteria.length > 0 ? 
+            totalHealth / this.simulation.entityManager.bacteria.length : 0;
         this.statsGraphs.avgHealth.data.push(avgHealth);
         
         // Calcula geração média
         let totalGeneration = 0;
-        for (let bacteria of this.simulation.bacteria) {
-            totalGeneration += bacteria.dna.generation;
+        for (let bacteria of this.simulation.entityManager.bacteria) {
+            if (bacteria.dna && typeof bacteria.dna.generation === 'number') {
+                totalGeneration += bacteria.dna.generation;
+            } else {
+                totalGeneration += 1; // Valor padrão se dna.generation não existir
+            }
         }
-        const avgGeneration = this.simulation.bacteria.length > 0 ? 
-            totalGeneration / this.simulation.bacteria.length : 1;
+        const avgGeneration = this.simulation.entityManager.bacteria.length > 0 ? 
+            totalGeneration / this.simulation.entityManager.bacteria.length : 1;
         this.statsGraphs.generation.data.push(avgGeneration);
         
         // Limita o número de pontos
@@ -309,13 +318,35 @@ class SimulationVisualization {
     draw() {
         push();
         
+        // Limpa a tela
+        background(51);
+        
+        // Verifica se a simulação está disponível
+        if (!this.simulation) {
+            console.error("❌ ERRO: Simulação não disponível no sistema de visualização");
+            fill(255, 0, 0);
+            textSize(20);
+            textAlign(CENTER, CENTER);
+            text("ERRO: Simulação não disponível", width/2, height/2);
+            pop();
+            return;
+        }
+        
+        // Verifica se o gerenciador de entidades está disponível
+        if (!this.simulation.entityManager) {
+            console.error("❌ ERRO: EntityManager não disponível na simulação");
+            fill(255, 0, 0);
+            textSize(20);
+            textAlign(CENTER, CENTER);
+            text("ERRO: EntityManager não disponível", width/2, height/2);
+            pop();
+            return;
+        }
+        
         // Aplica zoom
         translate(width/2, height/2);
         scale(this.simulation.zoom || 1);
         translate(-width/2, -height/2);
-
-        // Limpa a tela
-        background(51);
 
         // Desenha os rastros se ativado
         if (this.simulation.showTrails) {
@@ -325,10 +356,18 @@ class SimulationVisualization {
         // Desenha os elementos
         this.drawObstacles();
         this.drawFood();
-        this.drawBacteria();
+        this.drawBacterias();
 
         // Desenha efeitos visuais
-        this.simulation.drawEffects();
+        if (this.simulation.entityManager.effects && 
+            Array.isArray(this.simulation.entityManager.effects)) {
+            // Desenha cada efeito
+            for (const effect of this.simulation.entityManager.effects) {
+                if (effect && typeof effect.draw === 'function') {
+                    effect.draw();
+                }
+            }
+        }
 
         // Desenha visualização do particionamento espacial
         if (this.showGrid && this.simulation.spatialGrid) {
@@ -342,119 +381,230 @@ class SimulationVisualization {
     }
 
     /**
-     * Desenha os rastros das bactérias
+     * Desenha as trilhas de movimento das bactérias
      */
     drawTrails() {
-        // Adiciona novas posições aos rastros
-        if (frameCount % 5 === 0) {
-            const newTrails = this.simulation.bacteria.map(b => ({
-                x: b.pos.x,
-                y: b.pos.y,
-                alpha: 255
-            }));
-            this.trails.push(...newTrails);
-
-            // Limita o número de rastros
-            while (this.trails.length > this.maxTrails) {
-                this.trails.shift();
-            }
-        }
-
-        // Desenha os rastros
-        noStroke();
-        for (let i = this.trails.length - 1; i >= 0; i--) {
-            const trail = this.trails[i];
-            trail.alpha = max(0, trail.alpha - 2);
+        if (!this.simulation || !this.simulation.entityManager) return;
+        
+        // Verifica se as trilhas devem ser exibidas
+        if (!this.simulation.showTrails) return;
+        
+        const bacteria = this.simulation.entityManager.bacteria;
+        if (!Array.isArray(bacteria)) return;
+        
+        push();
+        
+        // Usa as configurações de trilha da simulação
+        const trailOpacity = this.simulation.trailOpacity;
+        const trailLength = this.simulation.trailLength;
+        
+        for (const b of bacteria) {
+            if (!b || !b.movement || !Array.isArray(b.movement.history)) continue;
             
-            if (trail.alpha <= 0) {
-                this.trails.splice(i, 1);
-                continue;
+            // Define a cor da trilha baseada no tipo e sexo da bactéria
+            let trailColor;
+            if (b.isFemale) {
+                trailColor = color(255, 150, 200, 255 * trailOpacity); // Rosa para fêmeas
+            } else {
+                trailColor = color(100, 150, 255, 255 * trailOpacity); // Azul para machos
             }
-
-            fill(255, trail.alpha * 0.4);
-            circle(trail.x, trail.y, 4);
+            
+            // Desenha a trilha
+            noFill();
+            stroke(trailColor);
+            strokeWeight(2);
+            beginShape();
+            
+            // Limita o número de pontos ao comprimento da trilha definido
+            const historyLength = Math.min(b.movement.history.length, trailLength);
+            
+            // Desenha somente os pontos mais recentes (limitado pelo comprimento da trilha)
+            for (let i = b.movement.history.length - historyLength; i < b.movement.history.length; i++) {
+                if (i >= 0) {
+                    const pos = b.movement.history[i];
+                    if (pos) {
+                        // Calcula a opacidade baseada na posição no histórico (mais recente = mais opaco)
+                        const opacity = map(
+                            i, 
+                            b.movement.history.length - historyLength, 
+                            b.movement.history.length - 1, 
+                            0.2 * trailOpacity, 
+                            trailOpacity
+                        );
+                        
+                        // Define a cor com opacidade variável
+                        stroke(
+                            red(trailColor), 
+                            green(trailColor), 
+                            blue(trailColor), 
+                            255 * opacity
+                        );
+                        
+                        // Define a espessura do traço
+                        const weight = map(
+                            i,
+                            b.movement.history.length - historyLength,
+                            b.movement.history.length - 1,
+                            0.5,
+                            2
+                        );
+                        strokeWeight(weight);
+                        
+                        // Desenha o ponto
+                        vertex(pos.x, pos.y);
+                    }
+                }
+            }
+            
+            endShape();
         }
+        
+        pop();
     }
 
     /**
-     * Desenha as bactérias na simulação
+     * Desenha uma bactéria na tela
+     * @param {Object} bacteria - A bactéria a ser desenhada
      */
-    drawBacteria() {
-        for (let bacteria of this.simulation.bacteria) {
-            if (!bacteria || !bacteria.pos) {
-                console.warn("Bactéria sem posição detectada, pulando...");
-                continue;  // Pula bactérias sem posição definida
-            }
-            
-            push();
-            translate(bacteria.pos.x, bacteria.pos.y);
-            
-            // Verifica se há ângulo válido antes de rotacionar
-            if (bacteria.movement && typeof bacteria.movement.angle === 'number') {
-                rotate(bacteria.movement.angle);
-            }
-
-            // Corpo da bactéria
-            noStroke();
-            
-            // Usa cor baseada no gênero se a cor da bactéria não estiver definida
-            let bacteriaColor;
-            if (bacteria.color) {
-                bacteriaColor = bacteria.color;
-            } else {
-                bacteriaColor = bacteria.isFemale ? color(255, 150, 200) : color(150, 200, 255);
-            }
-            
-            fill(bacteriaColor);
-            
-            // Define um tamanho padrão se não estiver disponível
-            const size = bacteria.size || 20;
-            ellipse(0, 0, size, size * 0.7);
-
-            // Indicador de gênero se ativado
-            if (this.simulation.showGender) {
-                stroke(255);
-                strokeWeight(1);
-                if (bacteria.isFemale) {
-                    circle(0, size * 0.4, size * 0.2);
-                } else {
-                    line(0, size * 0.3, 0, size * 0.5);
-                    line(-size * 0.1, size * 0.4, size * 0.1, size * 0.4);
-                }
-            }
-
-            // Barra de energia se ativada
-            if (this.simulation.showEnergy) {
-                const energyWidth = size * 1.2;
-                const energyHeight = 3;
-                const energyY = -size * 0.7;
-                
-                // Fundo da barra
-                noStroke();
-                fill(0, 100);
-                rect(-energyWidth/2, energyY, energyWidth, energyHeight);
-                
-                // Barra de energia
-                const health = bacteria.health !== undefined ? bacteria.health : 100;
-                const energyLevel = map(health, 0, 100, 0, energyWidth);
-                fill(lerpColor(color(255, 0, 0), color(0, 255, 0), health/100));
-                rect(-energyWidth/2, energyY, energyLevel, energyHeight);
-            }
-
-            pop();
+    drawBacteria(bacteria) {
+        if (!bacteria || !bacteria.isActive) {
+            return;
         }
+
+        // Verificação completa de integridade da posição
+        if (!bacteria.pos) {
+            console.warn(`Bactéria sem posição válida ID: ${bacteria.id}`);
+            return;
+        }
+
+        // Verifica especificamente o caso onde bacteria.pos.x é um objeto (erro identificado)
+        if (typeof bacteria.pos.x === 'object') {
+            console.warn(`Objeto detectado em bacteria.pos.x para ID: ${bacteria.id}`, bacteria.pos.x);
+            
+            // Tenta extrair o valor de x a partir do objeto, se possível
+            if (bacteria.pos.x && typeof bacteria.pos.x.x === 'number') {
+                bacteria.pos = {
+                    x: bacteria.pos.x.x,
+                    y: (typeof bacteria.pos.y === 'number') ? bacteria.pos.y : 0
+                };
+                console.log(`Posição corrigida para ID: ${bacteria.id}:`, bacteria.pos);
+            } else {
+                // Não foi possível corrigir, usar valores padrão
+                const worldWidth = width || 800;
+                const worldHeight = height || 600;
+                bacteria.pos = {
+                    x: worldWidth / 2,
+                    y: worldHeight / 2
+                };
+                console.warn(`Posição redefinida para padrão ID: ${bacteria.id}:`, bacteria.pos);
+            }
+            
+            // Tenta corrigir a posição na bactéria original
+            if (this.simulation && typeof this.simulation.fixBacteriaPosition === 'function') {
+                this.simulation.fixBacteriaPosition(bacteria.id, bacteria.pos.x, bacteria.pos.y);
+            }
+        }
+
+        // Continua a verificação para números inválidos
+        if (isNaN(bacteria.pos.x) || isNaN(bacteria.pos.y) || 
+            !isFinite(bacteria.pos.x) || !isFinite(bacteria.pos.y)) {
+            
+            const bacteriaId = bacteria.id || "desconhecido";
+            console.warn(`Valores de posição inválidos para bactéria ID: ${bacteriaId}: (${bacteria.pos.x}, ${bacteria.pos.y})`);
+            
+            // Usar posição padrão se valores forem inválidos
+            const worldWidth = width || 800;
+            const worldHeight = height || 600;
+            bacteria.pos = {
+                x: worldWidth / 2,
+                y: worldHeight / 2
+            };
+            
+            // Tenta corrigir a posição na bactéria original
+            if (this.simulation && typeof this.simulation.fixBacteriaPosition === 'function') {
+                this.simulation.fixBacteriaPosition(bacteriaId, bacteria.pos.x, bacteria.pos.y);
+            }
+        }
+
+        // Após validações, continuar com o desenho
+        const size = bacteria.size || 5;
+        let fillColor;
+
+        // Verifica se há ângulo válido antes de rotacionar
+        if (bacteria.movement && typeof bacteria.movement.angle === 'number' && 
+            !isNaN(bacteria.movement.angle) && isFinite(bacteria.movement.angle)) {
+            rotate(bacteria.movement.angle);
+        }
+
+        // Corpo da bactéria
+        noStroke();
+        
+        // Usa cor baseada no gênero se a cor da bactéria não estiver definida
+        if (bacteria.color) {
+            fillColor = bacteria.color;
+        } else {
+            fillColor = bacteria.isFemale ? color(255, 150, 200) : color(150, 200, 255);
+        }
+        
+        fill(fillColor);
+        
+        ellipse(0, 0, size, size * 0.7);
+
+        // Indicador de gênero se ativado
+        if (this.simulation.showGender) {
+            stroke(255);
+            strokeWeight(1);
+            if (bacteria.isFemale) {
+                circle(0, size * 0.4, size * 0.2);
+            } else {
+                line(0, size * 0.3, 0, size * 0.5);
+                line(-size * 0.1, size * 0.4, size * 0.1, size * 0.4);
+            }
+        }
+
+        // Barra de energia se ativada
+        if (this.simulation.showEnergy) {
+            const energyWidth = size * 1.2;
+            const energyHeight = 3;
+            const energyY = -size * 0.7;
+            
+            // Fundo da barra
+            noStroke();
+            fill(0, 100);
+            rect(-energyWidth/2, energyY, energyWidth, energyHeight);
+            
+            // Barra de energia
+            const health = bacteria.health !== undefined ? bacteria.health : 100;
+            const energyLevel = map(health, 0, 100, 0, energyWidth);
+            fill(lerpColor(color(255, 0, 0), color(0, 255, 0), health/100));
+            rect(-energyWidth/2, energyY, energyLevel, energyHeight);
+        }
+        
+        pop();
     }
 
     /**
      * Desenha a comida
      */
     drawFood() {
-        for (let food of this.simulation.food) {
-            if (!food.position) continue;
-            const size = map(food.nutrition || 30, 10, 50, 5, 15);
-            fill(0, 255, 0);
-            noStroke();
-            circle(food.position.x, food.position.y, size);
+        try {
+            // Verifica se entityManager está disponível
+            if (!this.simulation || !this.simulation.entityManager) {
+                return;
+            }
+            
+            // Desenha cada item de comida
+            const foods = this.simulation.entityManager.food;
+            for (let i = 0; i < foods.length; i++) {
+                const food = foods[i];
+                if (food && food.position) {
+                    fill(0, 255, 0);
+                    noStroke();
+                    circle(food.position.x, food.position.y, 8);
+                }
+            }
+        } catch (error) {
+            console.error("❌ Erro ao desenhar comida:", error);
         }
     }
 
@@ -462,60 +612,97 @@ class SimulationVisualization {
      * Desenha os obstáculos
      */
     drawObstacles() {
-        fill(100);
-        stroke(200);
-        strokeWeight(2);
-        for (let obstacle of this.simulation.obstacles) {
-            // Usa w/h ou width/height, o que estiver disponível
-            const w = obstacle.w || obstacle.width || 20;
-            const h = obstacle.h || obstacle.height || 20;
-            rect(obstacle.x, obstacle.y, w, h);
+        try {
+            // Verifica se entityManager está disponível
+            if (!this.simulation || !this.simulation.entityManager) {
+                return;
+            }
+            
+            // Desenha cada obstáculo
+            const obstacles = this.simulation.entityManager.obstacles;
+            for (let i = 0; i < obstacles.length; i++) {
+                const obstacle = obstacles[i];
+                if (obstacle && obstacle.pos) {
+                    fill(100);
+                    noStroke();
+                    circle(obstacle.pos.x, obstacle.pos.y, obstacle.size || 20);
+                }
+            }
+        } catch (error) {
+            console.error("❌ Erro ao desenhar obstáculos:", error);
         }
     }
 
     /**
-     * Exibe informações da simulação
+     * Exibe informações gerais da simulação na tela
      */
     displayInfo() {
-        if (!this.simulation.controls?.statsCheckbox?.checked()) return;
-
-        const stats = this.simulation.stats || {};
-        const x = 810;
-        let y = 20;
-        const lineHeight = 20;
-
-        fill(255);
-        noStroke();
-        textAlign(LEFT);
-        textSize(14);
-
-        // Informações gerais
-        text(`Geração: ${stats.generation || 1}`, x, y); y += lineHeight;
-        text(`População: ${stats.totalBacteria || 0}`, x, y); y += lineHeight;
-        text(`Fêmeas: ${stats.femaleBacterias || 0}`, x, y); y += lineHeight;
-        text(`Machos: ${stats.maleBacterias || 0}`, x, y); y += lineHeight;
-        y += lineHeight;
-
-        // Estatísticas vitais
-        text(`Nascimentos: ${stats.births || 0}`, x, y); y += lineHeight;
-        text(`Mortes: ${stats.deaths || 0}`, x, y); y += lineHeight;
-        text(`Comida Consumida: ${stats.foodConsumed || 0}`, x, y); y += lineHeight;
-        text(`Mutações: ${stats.mutations || 0}`, x, y); y += lineHeight;
-        y += lineHeight;
-
-        // Estado atual
-        text(`Eventos: ${stats.eventsTriggered || 0}`, x, y); y += lineHeight;
-        text(`Saúde Média: ${(stats.averageHealth || 0).toFixed(1)}`, x, y); y += lineHeight;
-        text(`Comida Disponível: ${this.simulation.food?.length || 0}`, x, y); y += lineHeight;
-        text(`Obstáculos: ${this.simulation.obstacles?.length || 0}`, x, y);
-
-        // Adiciona informações sobre o sistema de grid e ciclo dia/noite
-        if (this.simulation.dayNightEnabled) {
+        if (!this.showStats || !this.simulation) return;
+        
+        try {
+            push();
+            
+            // Verifica se o gerenciador de entidades está disponível
+            if (!this.simulation.entityManager) {
+                console.error("❌ EntityManager não disponível para exibir informações");
+                pop();
+                return;
+            }
+            
+            fill(255);
+            noStroke();
             textAlign(LEFT, TOP);
             textSize(14);
-            fill(this.simulation.dayTime ? color(255, 200, 0) : color(100, 100, 255));
-            text(`Estado: ${this.simulation.dayTime ? 'Dia' : 'Noite'}`, 
-                 width - 150, height - 40);
+            
+            // Posição inicial para exibir estatísticas
+            let y = 20;
+            const x = 20;
+            const lineHeight = 18;
+            
+            // FPS
+            text(`FPS: ${frameRate().toFixed(0)}`, x, y);
+            y += lineHeight;
+            
+            // Contagem de bactérias
+            text(`Bactérias: ${this.simulation.entityManager.bacteria.length}`, x, y);
+            y += lineHeight;
+            
+            // Contagem de comida
+            text(`Comida: ${this.simulation.entityManager.food.length}`, x, y);
+            y += lineHeight;
+            
+            // Geração média (se disponível)
+            let avgGeneration = 1;
+            try {
+                let totalGen = 0;
+                let count = 0;
+                
+                for (const bacteria of this.simulation.entityManager.bacteria) {
+                    if (bacteria && bacteria.dna && typeof bacteria.dna.generation === 'number') {
+                        totalGen += bacteria.dna.generation;
+                        count++;
+                    }
+                }
+                
+                if (count > 0) {
+                    avgGeneration = totalGen / count;
+                }
+                
+                text(`Geração média: ${avgGeneration.toFixed(1)}`, x, y);
+                y += lineHeight;
+            } catch (error) {
+                console.warn("⚠️ Erro ao calcular geração média:", error);
+            }
+            
+            // Status da simulação (pausada ou em execução)
+            if (this.simulation.paused) {
+                fill(255, 100, 100);
+                text("SIMULAÇÃO PAUSADA", x, y);
+            }
+            
+            pop();
+        } catch (error) {
+            console.error("❌ Erro ao exibir informações:", error);
         }
     }
 
@@ -536,6 +723,85 @@ class SimulationVisualization {
         for (let y = 0; y <= grid.rows; y++) {
             const yPos = y * grid.cellSize;
             line(0, yPos, this.simulation.width, yPos);
+        }
+    }
+
+    /**
+     * Desenha as bactérias na tela
+     */
+    drawBacterias() {
+        try {
+            // Verifica se a simulação está disponível
+            if (!this.simulation) {
+                console.error("❌ ERRO no drawBacterias: Simulação não definida");
+                return;
+            }
+            
+            // Verifica se o gerenciador de entidades está disponível
+            if (!this.simulation.entityManager) {
+                console.error("❌ ERRO no drawBacterias: EntityManager não definido na simulação");
+                return;
+            }
+            
+            // Verifica se o array de bactérias existe
+            if (!this.simulation.entityManager.bacteria) {
+                console.error("❌ ERRO no drawBacterias: Array de bactérias não existe no EntityManager");
+                return;
+            }
+            
+            // Verifica se bacteria é um array válido
+            if (!Array.isArray(this.simulation.entityManager.bacteria)) {
+                console.error("❌ ERRO no drawBacterias: O objeto bacteria não é um array");
+                console.log(`🔍 Tipo de bacteria: ${typeof this.simulation.entityManager.bacteria}`);
+                return;
+            }
+            
+            // Log do número de bactérias a cada 60 frames
+            if (frameCount % 60 === 0) {
+                console.log(`🦠 Desenhando ${this.simulation.entityManager.bacteria.length} bactérias`);
+            }
+            
+            // Remove valores null ou undefined do array
+            const validBacteria = this.simulation.entityManager.bacteria.filter(b => b);
+            
+            if (validBacteria.length !== this.simulation.entityManager.bacteria.length) {
+                console.warn(`⚠️ Removidos ${this.simulation.entityManager.bacteria.length - validBacteria.length} valores nulos do array de bactérias`);
+                this.simulation.entityManager.bacteria = validBacteria;
+            }
+            
+            // Desenha cada bactéria válida
+            for (let i = 0; i < validBacteria.length; i++) {
+                try {
+                    const bacteria = validBacteria[i];
+                    
+                    // Verifica se a bactéria é um objeto válido
+                    if (!bacteria || typeof bacteria !== 'object') {
+                        console.warn(`⚠️ Bactéria ${i} inválida: ${typeof bacteria}`);
+                        continue;
+                    }
+                    
+                    // Verifica se a bactéria tem um método draw
+                    if (typeof bacteria.draw === 'function') {
+                        bacteria.draw();
+                    } else {
+                        // Tenta desenhar a bactéria usando propriedades básicas
+                        if (bacteria.pos && typeof bacteria.pos.x === 'number' && typeof bacteria.pos.y === 'number') {
+                            push();
+                            fill(bacteria.isFemale ? color(255, 150, 200) : color(100, 150, 255));
+                            noStroke();
+                            ellipse(bacteria.pos.x, bacteria.pos.y, bacteria.size || 10);
+                            pop();
+                        } else {
+                            console.warn(`⚠️ Bactéria ${i} não tem método draw nem posição válida`);
+                        }
+                    }
+                } catch (error) {
+                    console.error(`❌ Erro ao desenhar bactéria ${i}:`, error);
+                }
+            }
+            
+        } catch (error) {
+            console.error("❌ ERRO ao desenhar bactérias:", error);
         }
     }
 }

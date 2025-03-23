@@ -18,190 +18,378 @@ class MessageGenerator {
      * @returns {string} - Tipo de mensagem
      */
     determineMessageType(sender, receiver) {
-        if (!sender || !receiver) {
-            console.warn("MessageGenerator: sender ou receiver inválido");
-            return null;
-        }
-        
-        const messageTypes = this.communicationSystem.messageManager.messageTypes;
-        const relationshipManager = this.communicationSystem.relationshipManager;
-        const simulation = this.communicationSystem.simulation;
-        
-        // Verifica relacionamento atual
-        const relationship = relationshipManager.getRelationship(sender, receiver);
-        
-        // Verifica se há predadores próximos
-        const predatorNearby = simulation.predators.some(p => 
-            dist(sender.pos.x, sender.pos.y, p.pos.x, p.pos.y) < sender.perceptionRadius
-        );
-        
-        // Verifica o estado atual das bactérias com segurança
-        let senderState = null;
-        let receiverState = null;
-        
-        // Verifica sender.states de forma segura
-        if (sender.states && typeof sender.states.getCurrentState === 'function') {
-            senderState = sender.states.getCurrentState();
-        } else if (sender.stateManager && typeof sender.stateManager.getCurrentState === 'function') {
-            senderState = sender.stateManager.getCurrentState();
-        }
-        
-        // Verifica receiver.states de forma segura
-        if (receiver.states && typeof receiver.states.getCurrentState === 'function') {
-            receiverState = receiver.states.getCurrentState();
-        } else if (receiver.stateManager && typeof receiver.stateManager.getCurrentState === 'function') {
-            receiverState = receiver.stateManager.getCurrentState();
-        }
-        
-        // Se não foi possível determinar os estados, retorna uma mensagem padrão
-        if (senderState === null || receiverState === null) {
-            return messageTypes.GREETING;
-        }
-        
-        // Pode avisar sobre perigo
-        if (predatorNearby && random() < 0.7) {
-            return messageTypes.DANGER_WARNING;
-        }
-        
-        // Obtém energia de forma segura
-        const getSenderEnergy = () => {
-            if (sender.states && typeof sender.states.getEnergy === 'function') {
-                return sender.states.getEnergy();
-            } else if (sender.stateManager && typeof sender.stateManager.getEnergy === 'function') {
-                return sender.stateManager.getEnergy();
-            } else if (typeof sender.energy === 'number') {
-                return sender.energy;
+        try {
+            // Verifica se sender e receiver são válidos
+            if (!sender || !receiver) {
+                console.warn("MessageGenerator: sender ou receiver inválido");
+                return this.getDefaultMessageType();
             }
-            return 50; // valor padrão se não conseguir obter
-        };
-        
-        const getReceiverEnergy = () => {
-            if (receiver.states && typeof receiver.states.getEnergy === 'function') {
-                return receiver.states.getEnergy();
-            } else if (receiver.stateManager && typeof receiver.stateManager.getEnergy === 'function') {
-                return receiver.stateManager.getEnergy();
-            } else if (typeof receiver.energy === 'number') {
-                return receiver.energy;
+            
+            // Verifica se o communicationSystem existe
+            if (!this.communicationSystem) {
+                console.error("MessageGenerator: communicationSystem não inicializado");
+                return this.getDefaultMessageType();
             }
-            return 50; // valor padrão se não conseguir obter
-        };
-        
-        const senderEnergy = getSenderEnergy();
-        const receiverEnergy = getReceiverEnergy();
-        
-        // Se estiver com pouca energia, pode pedir comida
-        if (senderEnergy < 30 && random() < 0.5) {
-            return messageTypes.HELP_REQUEST;
-        }
-        
-        // Se estiver procurando comida, pode compartilhar informação
-        if (senderState === 'seekingFood' && random() < 0.4) {
-            return messageTypes.FOOD_INFO;
-        }
-        
-        // Pode tentar reprodução se for de sexos opostos e tiver energia
-        if (sender.isFemale !== receiver.isFemale && 
-            senderEnergy > 60 && 
-            receiverEnergy > 60 &&
-            random() < 0.3) {
-            return messageTypes.MATING;
-        }
-        
-        // Verifica genes de forma segura
-        const getSenderGene = (geneName, defaultValue = 0.5) => {
-            if (sender.dna && sender.dna.genes && typeof sender.dna.genes[geneName] === 'number') {
-                return sender.dna.genes[geneName];
+            
+            // Verifica se o messageManager existe
+            if (!this.communicationSystem.messageManager) {
+                console.error("MessageGenerator: messageManager não encontrado");
+                return this.getDefaultMessageType();
             }
-            return defaultValue;
-        };
-        
-        // Se for agressivo, chance de mensagem agressiva
-        if (getSenderGene('aggressiveness') > 0.7 && random() < 0.4) {
-            return messageTypes.AGGRESSIVE;
+            
+            // Verifica se messageTypes existe
+            const messageManager = this.communicationSystem.messageManager;
+            if (!messageManager.messageTypes) {
+                console.error("MessageGenerator: messageTypes não encontrado no messageManager");
+                return this.getDefaultMessageType();
+            }
+            
+            const messageTypes = messageManager.messageTypes;
+            
+            // Verifica se relationshipManager existe
+            if (!this.communicationSystem.relationshipManager) {
+                console.error("MessageGenerator: relationshipManager não encontrado");
+                return messageTypes.GREETING;
+            }
+            
+            const relationshipManager = this.communicationSystem.relationshipManager;
+            
+            // Verifica se simulation existe
+            if (!this.communicationSystem.simulation) {
+                console.error("MessageGenerator: simulation não encontrada");
+                return messageTypes.GREETING;
+            }
+            
+            const simulation = this.communicationSystem.simulation;
+            
+            // Verifica se há predadores
+            if (!simulation.predators || !Array.isArray(simulation.predators)) {
+                console.warn("MessageGenerator: simulation.predators não é um array");
+                simulation.predators = [];
+            }
+            
+            // Verifica relacionamento atual com tratamento de erro
+            let relationship = null;
+            try {
+                relationship = relationshipManager.getRelationship(sender, receiver);
+            } catch (e) {
+                console.error("MessageGenerator: erro ao obter relacionamento:", e);
+            }
+            
+            // Verifica se há predadores próximos com tratamento de erro
+            let predatorNearby = false;
+            try {
+                predatorNearby = simulation.predators.some(p => {
+                    if (!p || !p.pos) return false;
+                    return dist(sender.pos.x, sender.pos.y, p.pos.x, p.pos.y) < (sender.perceptionRadius || 150);
+                });
+            } catch (e) {
+                console.error("MessageGenerator: erro ao verificar predadores próximos:", e);
+            }
+            
+            // Verifica o estado atual das bactérias com segurança
+            let senderState = null;
+            let receiverState = null;
+            
+            // Verifica sender.states de forma segura
+            try {
+                if (sender.states && typeof sender.states.getCurrentState === 'function') {
+                    senderState = sender.states.getCurrentState();
+                } else if (sender.stateManager && typeof sender.stateManager.getCurrentState === 'function') {
+                    senderState = sender.stateManager.getCurrentState();
+                }
+            } catch (e) {
+                console.error("MessageGenerator: erro ao obter estado do remetente:", e);
+            }
+            
+            // Verifica receiver.states de forma segura
+            try {
+                if (receiver.states && typeof receiver.states.getCurrentState === 'function') {
+                    receiverState = receiver.states.getCurrentState();
+                } else if (receiver.stateManager && typeof receiver.stateManager.getCurrentState === 'function') {
+                    receiverState = receiver.stateManager.getCurrentState();
+                }
+            } catch (e) {
+                console.error("MessageGenerator: erro ao obter estado do destinatário:", e);
+            }
+            
+            // Log para depuração
+            console.debug("MessageGenerator: dados para determinar mensagem", {
+                senderState,
+                receiverState,
+                relationship: relationship ? relationship.type : "nenhum",
+                predatorNearby
+            });
+            
+            // Se não foi possível determinar os estados, retorna uma mensagem padrão
+            if (senderState === null || receiverState === null) {
+                console.warn("MessageGenerator: estados não determinados, usando tipo padrão");
+                return messageTypes.GREETING;
+            }
+            
+            // Agora determina o tipo de mensagem baseado no contexto
+            
+            // Pode avisar sobre perigo
+            if (predatorNearby) {
+                return messageTypes.DANGER_WARNING;
+            }
+            
+            // Verifique se há relacionamento existente e use-o para determinar o tipo
+            if (relationship) {
+                if (relationship.type === 'friendship') {
+                    if (sender.isFemale !== receiver.isFemale) {
+                        return messageTypes.MATING;
+                    }
+                    return messageTypes.FRIENDSHIP;
+                }
+                
+                if (relationship.type === 'conflict') {
+                    return messageTypes.AGGRESSIVE;
+                }
+            }
+            
+            // Verificação de estado
+            if (senderState === 'hungry' || receiverState === 'hungry') {
+                return messageTypes.FOOD_INFO;
+            }
+            
+            if (senderState === 'fleeing' || receiverState === 'fleeing') {
+                return messageTypes.HELP_REQUEST;
+            }
+            
+            // Se nada específico foi encontrado, escolha aleatória entre saudação e aleatório
+            return random() > 0.5 ? messageTypes.GREETING : messageTypes.RANDOM;
+        } catch (e) {
+            console.error("MessageGenerator: erro crítico ao determinar tipo de mensagem:", e);
+            return this.getDefaultMessageType();
         }
-        
-        // Se for sociável, chance de amizade
-        if (getSenderGene('sociability') > 0.7 && random() < 0.3) {
-            return messageTypes.FRIENDSHIP;
-        }
-        
-        // Se for o primeiro contato, provavelmente é um cumprimento
-        if (!relationship || relationship.interactions.length === 0) {
-            return messageTypes.GREETING;
-        }
-        
-        // Caso padrão é um comentário aleatório
-        return messageTypes.RANDOM_COMMENT;
     }
     
     /**
-     * Gera uma mensagem baseada no tipo
-     * @param {Bacteria} sender - Bactéria que envia
-     * @param {Bacteria} receiver - Bactéria que recebe
-     * @param {string} type - Tipo de mensagem
+     * Obtém um tipo de mensagem padrão para fallback
+     * @returns {string} - Tipo de mensagem padrão
+     */
+    getDefaultMessageType() {
+        try {
+            if (this.communicationSystem && 
+                this.communicationSystem.messageManager && 
+                this.communicationSystem.messageManager.messageTypes) {
+                return this.communicationSystem.messageManager.messageTypes.GREETING;
+            }
+            return 'greeting'; // Valor mais básico possível
+        } catch (e) {
+            console.error("MessageGenerator: erro ao obter tipo de mensagem padrão:", e);
+            return 'greeting';
+        }
+    }
+    
+    /**
+     * Gera o conteúdo de uma mensagem com base no tipo
+     * @param {Bacteria} sender - Bactéria que envia a mensagem
+     * @param {Bacteria} receiver - Bactéria que recebe a mensagem
+     * @param {string} messageType - Tipo de mensagem
      * @returns {string} - Conteúdo da mensagem
      */
-    generateMessage(sender, receiver, type) {
-        const messageTypes = this.communicationSystem.messageManager.messageTypes;
-        
-        // Mensagens por tipo
-        const messages = {
-            [messageTypes.GREETING]: [
-                `Olá! Prazer em conhecer você.`,
-                `Oi, como vai? Sou nova por aqui.`,
-                `Hey! Tudo bem com você?`,
-                `Olá, parente! Como está o ambiente?`
-            ],
-            [messageTypes.FOOD_INFO]: [
-                `Tem comida para o lado ${this.getRandomDirection()}.`,
-                `Encontrei recursos perto daqui!`,
-                `Venha comigo, achei uma fonte de energia.`,
-                `Já comeu hoje? Tem bastante comida ali.`
-            ],
-            [messageTypes.DANGER_WARNING]: [
-                `CUIDADO! Predador se aproximando!`,
-                `PERIGO! Fuja para o lado ${this.getRandomDirection()}!`,
-                `Alerta! Tem um predador por perto!`,
-                `Estamos em perigo! Predador à vista!`
-            ],
-            [messageTypes.HELP_REQUEST]: [
-                `Estou com pouca energia, pode me ajudar?`,
-                `Preciso de comida, você sabe onde tem?`,
-                `Socorro! Estou sem energia.`,
-                `Pode me dizer onde encontrar recursos?`
-            ],
-            [messageTypes.FRIENDSHIP]: [
-                `Gostei de você, vamos ser amigos!`,
-                `Podemos formar uma aliança?`,
-                `Você parece legal, vamos cooperar?`,
-                `Seu DNA parece interessante, vamos nos aproximar!`
-            ],
-            [messageTypes.AGGRESSIVE]: [
-                `Saia do meu caminho!`,
-                `Este território é meu, saia daqui!`,
-                `Você é fraco, não vai sobreviver muito.`,
-                `Não se aproxime da minha comida!`
-            ],
-            [messageTypes.MATING]: [
-                `Nossos genes combinam bem, que tal nos reproduzirmos?`,
-                `Você parece ter bons genes. Vamos criar uma nova geração?`,
-                `Que tal compartilharmos nosso DNA?`,
-                `Estou pronto para reproduzir, e você?`
-            ],
-            [messageTypes.RANDOM]: [
-                `Percebeu como o ambiente mudou hoje?`,
-                `Você é de qual geração?`,
-                `Como está sua energia?`,
-                `Esse ambiente está ficando interessante!`,
-                `Já viu quantos predadores têm por aí?`,
-                `Acabei de me dividir, me sinto renovado!`,
-                `Quais seus genes mais fortes?`,
-                `Você está buscando mais comida?`
-            ]
-        };
-        
-        // Seleciona uma mensagem aleatória do tipo especificado
-        return random(messages[type] || messages[messageTypes.RANDOM]);
+    generateMessage(sender, receiver, messageType) {
+        try {
+            // Verifica parâmetros
+            if (!sender || !receiver) {
+                console.warn("MessageGenerator: sender ou receiver inválido para gerar mensagem");
+                return "Olá!";
+            }
+            
+            // Verifica se messageType é válido
+            if (!messageType) {
+                console.warn("MessageGenerator: tipo de mensagem inválido");
+                return "Olá!";
+            }
+            
+            // Verifica se messageTypes está disponível
+            const messageTypes = this.communicationSystem?.messageManager?.messageTypes;
+            if (!messageTypes) {
+                console.warn("MessageGenerator: messageTypes não disponível");
+                return "Olá!";
+            }
+            
+            // Obtém nomes ou IDs para referência
+            const senderId = this.getBacteriaName(sender);
+            const receiverId = this.getBacteriaName(receiver);
+            
+            // Gera mensagem baseada no tipo
+            switch (messageType) {
+                case messageTypes.GREETING:
+                    return this.generateGreeting(sender);
+                    
+                case messageTypes.FOOD_INFO:
+                    return this.generateFoodInfo(sender);
+                    
+                case messageTypes.DANGER_WARNING:
+                    return this.generateDangerWarning(sender);
+                    
+                case messageTypes.HELP_REQUEST:
+                    return this.generateHelpRequest(sender);
+                    
+                case messageTypes.FRIENDSHIP:
+                    return this.generateFriendshipMessage(sender);
+                    
+                case messageTypes.AGGRESSIVE:
+                    return this.generateAggressiveMessage(sender);
+                    
+                case messageTypes.MATING:
+                    return this.generateMatingMessage(sender, receiver);
+                    
+                case messageTypes.RANDOM:
+                    return this.generateRandomMessage(sender);
+                    
+                default:
+                    return this.generateRandomMessage(sender);
+            }
+        } catch (error) {
+            console.error("MessageGenerator: erro ao gerar mensagem:", error);
+            return "Olá! [Mensagem de Fallback]";
+        }
+    }
+    
+    /**
+     * Obtém o nome ou ID de uma bactéria para uso nas mensagens
+     * @param {Bacteria} bacteria - Bactéria
+     * @returns {string} - Nome ou ID da bactéria
+     */
+    getBacteriaName(bacteria) {
+        try {
+            if (!bacteria) return "???";
+            
+            // Tenta usar o nome ou ID para identificação
+            if (bacteria.name) return bacteria.name;
+            if (bacteria.id) return `Bactéria ${String(bacteria.id).substring(0, 4)}`;
+            return "Bactéria";
+        } catch (error) {
+            return "Bactéria";
+        }
+    }
+    
+    /**
+     * Gera uma mensagem de saudação
+     * @param {Bacteria} sender - Bactéria que envia
+     * @returns {string} - Mensagem
+     */
+    generateGreeting(sender) {
+        const greetings = [
+            "Olá!",
+            "Oi, tudo bem?",
+            "E aí, como vai?",
+            "Prazer em conhecê-lo!",
+            "Oi, sou a bactéria " + this.getBacteriaName(sender)
+        ];
+        return random(greetings);
+    }
+    
+    /**
+     * Gera uma mensagem sobre comida
+     * @param {Bacteria} sender - Bactéria que envia
+     * @returns {string} - Mensagem
+     */
+    generateFoodInfo(sender) {
+        const messages = [
+            "Encontrei comida nesta área!",
+            "Tem recursos alimentares por aqui",
+            "Precisando de comida? Esta área tem nutrientes",
+            "Estou compartilhando informação: há comida por aqui!"
+        ];
+        return random(messages);
+    }
+    
+    /**
+     * Gera uma mensagem de aviso sobre perigo
+     * @param {Bacteria} sender - Bactéria que envia
+     * @returns {string} - Mensagem
+     */
+    generateDangerWarning(sender) {
+        const messages = [
+            "CUIDADO! Predador próximo!",
+            "Perigo! Detecto ameaça nas proximidades!",
+            "Alerta: predador detectado!",
+            "Fuja! Há um predador nesta área!"
+        ];
+        return random(messages);
+    }
+    
+    /**
+     * Gera uma mensagem de pedido de ajuda
+     * @param {Bacteria} sender - Bactéria que envia
+     * @returns {string} - Mensagem
+     */
+    generateHelpRequest(sender) {
+        const messages = [
+            "Preciso de ajuda! Estou com pouca energia",
+            "Socorro! Estou em perigo!",
+            "Pode me ajudar? Estou com dificuldades",
+            "Preciso de assistência urgente!"
+        ];
+        return random(messages);
+    }
+    
+    /**
+     * Gera uma mensagem de amizade
+     * @param {Bacteria} sender - Bactéria que envia
+     * @returns {string} - Mensagem
+     */
+    generateFriendshipMessage(sender) {
+        const messages = [
+            "Gosto de interagir com você!",
+            "Podemos cooperar juntos",
+            "Somos boas bactérias parceiras!",
+            "Vamos formar uma aliança?"
+        ];
+        return random(messages);
+    }
+    
+    /**
+     * Gera uma mensagem agressiva
+     * @param {Bacteria} sender - Bactéria que envia
+     * @returns {string} - Mensagem
+     */
+    generateAggressiveMessage(sender) {
+        const messages = [
+            "Fique longe do meu território!",
+            "Esta área é minha!",
+            "Não tente competir comigo!",
+            "Eu sou mais forte que você!"
+        ];
+        return random(messages);
+    }
+    
+    /**
+     * Gera uma mensagem relacionada à reprodução
+     * @param {Bacteria} sender - Bactéria que envia
+     * @param {Bacteria} receiver - Bactéria que recebe
+     * @returns {string} - Mensagem
+     */
+    generateMatingMessage(sender, receiver) {
+        const messages = [
+            "Nossos genes seriam compatíveis",
+            "Poderíamos criar descendentes fortes juntos",
+            "Que tal nos reproduzirmos?",
+            "Estou pronto para reprodução, e você?"
+        ];
+        return random(messages);
+    }
+    
+    /**
+     * Gera uma mensagem aleatória
+     * @param {Bacteria} sender - Bactéria que envia
+     * @returns {string} - Mensagem
+     */
+    generateRandomMessage(sender) {
+        const messages = [
+            "Como está o ambiente hoje?",
+            "Observo muitas mudanças por aqui",
+            "Este ecossistema é interessante",
+            "O que você acha deste ambiente?",
+            "Já viveu muito tempo por aqui?",
+            "Quantos ciclos você já completou?"
+        ];
+        return random(messages);
     }
     
     /**

@@ -5,15 +5,56 @@
 class BacteriaBase {
     /**
      * Cria uma nova bactéria
-     * @param {number} x - Posição X inicial
+     * @param {number|Object} x - Posição X inicial ou objeto com coordenadas {x, y}
      * @param {number} y - Posição Y inicial
      * @param {Object} parentDNA - DNA dos pais (opcional)
      * @param {number} energy - Energia inicial
      */
     constructor(x, y, parentDNA = null, energy = 100) {
+        // Verifica se o primeiro parâmetro é um objeto (compatibilidade retroativa)
+        if (typeof x === 'object' && x !== null) {
+            // Extrai valores do objeto, com validação
+            const posObj = x;
+            const posX = typeof posObj.x === 'number' && !isNaN(posObj.x) ? posObj.x : random(width * 0.1, width * 0.9);
+            const posY = typeof posObj.y === 'number' && !isNaN(posObj.y) ? posObj.y : random(height * 0.1, height * 0.9);
+            
+            // Atribui parâmetros a partir do objeto
+            x = posX;
+            y = posY;
+            parentDNA = posObj.parentDNA || parentDNA;
+            energy = typeof posObj.energy === 'number' ? posObj.energy : energy;
+        }
+        
+        // Validação de x e y antes de criar o vetor de posição
+        if (typeof x !== 'number' || isNaN(x)) {
+            console.warn("BacteriaBase: Posição X inválida, usando valor aleatório");
+            x = random(width * 0.1, width * 0.9);
+        }
+        if (typeof y !== 'number' || isNaN(y)) {
+            console.warn("BacteriaBase: Posição Y inválida, usando valor aleatório");
+            y = random(height * 0.1, height * 0.9);
+        }
+        
         // Posição e tamanho
         this.pos = createVector(x, y);
         this.size = 20;
+
+        // Verifica se o vetor de posição foi criado corretamente
+        if (!this.pos || typeof this.pos.x !== 'number' || isNaN(this.pos.x) || 
+            typeof this.pos.y !== 'number' || isNaN(this.pos.y)) {
+            console.error("BacteriaBase: Falha ao criar vetor de posição, recriando");
+            
+            // Tenta recriar o vetor com valores seguros
+            const safeX = width/2;
+            const safeY = height/2;
+            this.pos = createVector(safeX, safeY);
+            
+            // Verifica novamente e usa um objeto simples se necessário
+            if (!this.pos || typeof this.pos.x !== 'number') {
+                console.error("BacteriaBase: Segunda tentativa falhou, usando objeto simples");
+                this.pos = { x: safeX, y: safeY };
+            }
+        }
 
         // Inicializa DNA primeiro para ter acesso ao tempo de vida
         this.dna = new DNA(parentDNA);
@@ -42,7 +83,7 @@ class BacteriaBase {
         this.activeDiseases = new Set();      // Conjunto de doenças ativas
         this.immuneMemory = new Set();        // Memória de doenças para as quais já tem imunidade
         this.canReproduce = true;             // Flag que pode ser alterada por doenças
-        this.id = Date.now() + Math.floor(random(0, 1000)); // ID único
+        this.id = Date.now() + Math.floor(random(0, 1000000)); // ID único
 
         // Raio de percepção
         this.perceptionRadius = 150;

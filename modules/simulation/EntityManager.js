@@ -101,8 +101,47 @@ class EntityManager {
                     if (bacteria.movement.movement) {
                         bacteria.movement.movement.velocity = initialVelocity;
                         
-                        // Também define a posição do movimento para corresponder à bactéria
-                        bacteria.movement.movement.position = bacteria.pos.copy();
+                        // Garante que a posição do movimento é um vetor p5 válido
+                        if (!bacteria.pos) {
+                            console.error(`Bactéria ${i} sem posição válida ao configurar movimento`);
+                            bacteria.pos = createVector(x, y);
+                        }
+                        
+                        // Verifica se pos.x é um objeto antes de tentar fazer copy
+                        if (typeof bacteria.pos.x === 'object') {
+                            console.warn(`pos.x é um objeto ao configurar movimento da bactéria ${i}, corrigindo`);
+                            const tempPos = createVector(
+                                bacteria.pos.x && typeof bacteria.pos.x.x === 'number' ? bacteria.pos.x.x : x,
+                                bacteria.pos.y && typeof bacteria.pos.y === 'number' ? bacteria.pos.y : y
+                            );
+                            bacteria.pos = tempPos;
+                        }
+                        
+                        // Verifica se o método copy existe
+                        if (typeof bacteria.pos.copy === 'function') {
+                            bacteria.movement.movement.position = bacteria.pos.copy();
+                        } else {
+                            // Cria novo vetor se copy não estiver disponível
+                            bacteria.movement.movement.position = createVector(bacteria.pos.x, bacteria.pos.y);
+                        }
+                        
+                        // Valida a posição do movimento
+                        if (!bacteria.movement.movement.position || typeof bacteria.movement.movement.position.x !== 'number') {
+                            console.warn(`Posição de movimento inválida para bactéria ${i}, recriando`);
+                            bacteria.movement.movement.position = createVector(x, y);
+                        }
+                        
+                        // Garante que a posição e velocidade são números válidos
+                        if (isNaN(bacteria.pos.x) || isNaN(bacteria.pos.y)) {
+                            console.error(`Bactéria ${i} tem posição NaN, corrigindo`);
+                            bacteria.pos.x = x;
+                            bacteria.pos.y = y;
+                        }
+                        
+                        if (isNaN(bacteria.movement.movement.velocity.x) || isNaN(bacteria.movement.movement.velocity.y)) {
+                            console.error(`Bactéria ${i} tem velocidade NaN, corrigindo`);
+                            bacteria.movement.movement.velocity = p5.Vector.random2D().mult(3);
+                        }
                         
                         // Garantir que maxSpeed não esteja zerado
                         if (bacteria.movement.movement.maxSpeed <= 0) {
@@ -139,6 +178,16 @@ class EntityManager {
             // Adiciona à lista de bactérias
             this.bacteria.push(bacteria);
             console.log(`Bactéria adicionada em (${x.toFixed(0)},${y.toFixed(0)}), gênero: ${bacteria.isFemale ? 'feminino' : 'masculino'}`);
+            
+            // Atualiza estatísticas
+            if (this.simulation && this.simulation.statsManager && 
+                typeof this.simulation.statsManager.incrementStat === 'function') {
+                this.simulation.statsManager.incrementStat('totalBacteria');
+            } else {
+                console.log(`ℹ️ Estatística não registrada: statsManager ou método incrementStat não disponível`);
+            }
+            
+            console.log(`✅ Bactéria adicionada com sucesso, ID: ${bacteria.id}, Total: ${this.bacteria.length}`);
             
             return bacteria;
         } catch (error) {
@@ -197,139 +246,203 @@ class EntityManager {
     /**
      * Adiciona múltiplas bactérias à simulação
      * @param {number} count - Número de bactérias para adicionar
-     * @param {number} femaleRatio - Porcentagem de fêmeas (0-100)
+     * @param {number} femaleRatio - Percentual de fêmeas (0-100)
+     * @returns {number} - Número de bactérias adicionadas
      */
     addMultipleBacteria(count, femaleRatio) {
-        console.log("Método addMultipleBacteria chamado:", {count, femaleRatio});
+        console.log(`🚀 INICIANDO CRIAÇÃO DE BACTÉRIAS: ${count} bactérias, ${femaleRatio}% fêmeas`);
+        
+        // Depuração: Verifica se o EntityManager está sendo chamado corretamente
+        console.log(`🔍 Contexto: EntityManager é válido? ${!!this}`);
+        console.log(`🔍 Contexto: Classe atual: ${this.constructor.name}`);
+        console.log(`🔍 Referência à simulação: ${!!this.simulation}`);
         
         // Garante valores válidos
         count = Math.max(1, Math.min(100, count));
         femaleRatio = Math.max(0, Math.min(100, femaleRatio));
         
-        console.log("Valores ajustados:", {count, femaleRatio});
-        
         // Número de fêmeas a serem criadas
         const femaleCount = Math.round(count * (femaleRatio / 100));
-        console.log("Número de fêmeas a criar:", femaleCount);
         
         // Tamanho do array de bactérias antes
-        const beforeCount = this.bacteria.length;
-        console.log("Bactérias antes:", beforeCount);
+        const beforeCount = this.bacteria ? this.bacteria.length : 0;
+        
+        console.log(`🔍 Array de bactérias existe? ${!!this.bacteria}`);
+        console.log(`🔍 Tamanho do array de bactérias: ${beforeCount}`);
+        
+        // Verificação do ambiente p5.js
+        if (typeof width !== 'number' || typeof height !== 'number' || 
+            typeof createVector !== 'function') {
+            console.error(`❌ ERRO CRÍTICO: Ambiente p5.js não inicializado corretamente.`);
+            console.error(`width: ${width}, height: ${height}, createVector: ${typeof createVector}`);
+            return;
+        }
+        
+        // Verificação da disponibilidade da classe Bacteria
+        if (typeof Bacteria !== 'function') {
+            console.error(`❌ ERRO CRÍTICO: Classe Bacteria não encontrada.`);
+            console.log(`🔍 Tipo de Bacteria: ${typeof Bacteria}`);
+            console.log(`🔍 window.Bacteria existe? ${!!window.Bacteria}`);
+            return;
+        }
         
         try {
             // Adiciona as bactérias
             for (let i = 0; i < count; i++) {
-                // Determina se esta bactéria será fêmea
-                const isFemale = i < femaleCount;
-                
                 try {
-                    // Posição aleatória na tela
-                    const x = random(width * 0.8) + width * 0.1; // Evita bordas
-                    const y = random(height * 0.8) + height * 0.1; // Evita bordas
+                    // Determina se esta bactéria será fêmea
+                    const isFemale = i < femaleCount;
                     
-                    // Cria uma instância real de Bacteria com o novo formato
+                    // Gera posição aleatória dentro da área visível
+                    const x = Math.floor(random(width * 0.1, width * 0.9));
+                    const y = Math.floor(random(height * 0.1, height * 0.9));
+                    
+                    console.log(`🦠 Criando bactéria ${i+1}: ${isFemale ? 'Fêmea' : 'Macho'} em (${x}, ${y})`);
+                    
+                    // Criar uma instância de bactéria diretamente sem passar por outras funções
                     const bacteria = new Bacteria({
                         x: x,
                         y: y,
-                        parentDNA: null,
+                        isFemale: isFemale,
                         energy: this.initialEnergy,
-                        initialState: "exploring",
                         initialEnergy: this.initialEnergy,
-                        isFemale: isFemale
+                        initialState: "exploring"
                     });
                     
-                    // Verifica sistema de movimento
+                    // Verificações críticas antes de adicionar à lista
+                    if (!bacteria) {
+                        console.error(`❌ Falha ao criar bactéria ${i+1}: Instância não foi criada`);
+                        continue;
+                    }
+                    
+                    if (!bacteria.pos || typeof bacteria.pos.x !== 'number' || isNaN(bacteria.pos.x)) {
+                        console.warn(`⚠️ Bactéria ${i+1} tem posição inválida, corrigindo...`);
+                        bacteria.pos = createVector(x, y);
+                    }
+                    
+                    // Define a simulação na bactéria
+                    bacteria.simulation = this.simulation;
+                    
+                    // SOLUÇÃO RADICAL: Verifica e inicializa explicitamente o componente de movimento
                     if (!bacteria.movement) {
-                        console.error("Movimento não inicializado para a bactéria", i);
+                        console.log(`🔧 Inicializando movimento para bactéria ${i+1} (ID: ${bacteria.id || 'N/A'})`);
                         bacteria.movement = new BacteriaMovement(bacteria);
                     }
                     
-                    // Garantir que o sistema de movimento esteja completamente inicializado
-                    if (!bacteria.movement.movement) {
-                        console.warn("Sistema de movimento aninhado não existe para a bactéria", i);
-                        // Tenta recriar o sistema de movimento
-                        bacteria.movement = new BacteriaMovement(bacteria);
-                    }
-                    
-                    // Inicializa a velocidade se estiver zerada ou não existir
-                    if (!bacteria.movement.movement || 
-                        !bacteria.movement.movement.velocity || 
-                        typeof bacteria.movement.movement.velocity.mag !== 'function' || 
-                        bacteria.movement.movement.velocity.mag() === 0) {
+                    // SOLUÇÃO RADICAL: Força movimento inicial para garantir que comecem a se mover imediatamente
+                    try {
+                        // Aplica movimento diretamente na posição
+                        const randomAngle = random(TWO_PI);
+                        const moveX = cos(randomAngle) * 5;
+                        const moveY = sin(randomAngle) * 5;
                         
-                        console.log(`Inicializando velocidade para bactéria ${i}`);
+                        // Armazena ângulo inicial para movimento contínuo
+                        bacteria._movementAngle = randomAngle;
                         
-                        // Cria uma velocidade inicial mais forte
-                        const initialVelocity = p5.Vector.random2D();
-                        initialVelocity.mult(3); // Velocidade mais alta para garantir o movimento
-                        
-                        try {
-                            if (bacteria.movement.movement) {
-                                bacteria.movement.movement.velocity = initialVelocity;
-                                
-                                // Também define a posição do movimento para corresponder à bactéria
-                                bacteria.movement.movement.position = bacteria.pos.copy();
-                                
-                                // Garantir que maxSpeed não esteja zerado
-                                if (bacteria.movement.movement.maxSpeed <= 0) {
-                                    bacteria.movement.movement.maxSpeed = 4;
-                                }
-                                
-                                // Aplica uma força inicial também
-                                const initialForce = p5.Vector.random2D();
-                                initialForce.mult(2);
-                                bacteria.movement.movement.applyForce(initialForce);
-                                
-                                console.log(`Velocidade inicial configurada: ${initialVelocity.mag().toFixed(2)}`);
-                            } else {
-                                // Em caso de falha na estrutura aninhada, tenta criar um movimento direto
-                                console.warn("Criando um sistema de movimento manual para a bactéria", i);
-                                bacteria.movement = {
-                                    movement: new Movement(bacteria.pos.copy(), bacteria.size),
-                                    moveRandom: function(dt, speedModifier) {
-                                        const dir = p5.Vector.random2D();
-                                        dir.mult(speedModifier || 1);
-                                        this.movement.applyForce(dir);
-                                        this.movement.update(0, [], bacteria.size, false, dt);
-                                    }
-                                };
-                                
-                                // Inicializa a velocidade do novo movimento
-                                bacteria.movement.movement.velocity = initialVelocity;
-                            }
-                        } catch (error) {
-                            console.error("Erro ao inicializar movimento:", error);
+                        // Guarda uma referência para esse ângulo no componente de movimento
+                        if (bacteria.movement) {
+                            bacteria.movement._movementAngle = randomAngle;
                         }
+                        
+                        // Aplica movimento inicial para garantir que as bactérias comecem em posições diferentes
+                        bacteria.pos.x += moveX;
+                        bacteria.pos.y += moveY;
+                        
+                        console.log(`🔄 Movimento inicial aplicado à bactéria ${i+1}: ângulo=${(randomAngle * 180 / Math.PI).toFixed(0)}°`);
+                    } catch (moveError) {
+                        console.error(`⚠️ Não foi possível aplicar movimento inicial à bactéria ${i+1}:`, moveError);
                     }
                     
-                    // Verifica sistema de estados
-                    if (!bacteria.stateManager) {
-                        console.error("Sistema de estados não inicializado para a bactéria", i);
-                        bacteria.stateManager = new BacteriaStateManager(bacteria);
-                        bacteria.stateManager.setCurrentState("exploring");
-                    }
-                    
-                    // Adiciona à simulação
+                    // Adiciona à lista de bactérias diretamente
                     this.bacteria.push(bacteria);
                     
-                    console.log(`Bactéria ${i+1}/${count} criada (${isFemale ? 'fêmea' : 'macho'})`);
+                    // RADICAL: Força uma atualização inicial
+                    try {
+                        bacteria.update(1);
+                        console.log(`✓ Atualização inicial da bactéria ${i+1} concluída`);
+                    } catch (updateError) {
+                        console.error(`⚠️ Falha na atualização inicial da bactéria ${i+1}:`, updateError);
+                    }
+                    
+                    // Atualiza estatísticas
+                    if (this.simulation && this.simulation.statsManager && 
+                        typeof this.simulation.statsManager.incrementStat === 'function') {
+                        this.simulation.statsManager.incrementStat('totalBacteria');
+                    } else {
+                        console.log(`ℹ️ Estatística não registrada: statsManager ou método incrementStat não disponível`);
+                    }
+                    
+                    console.log(`✅ Bactéria ${i+1} adicionada com sucesso! ID: ${bacteria.id}`);
+                    
                 } catch (error) {
-                    console.error(`Erro ao criar bactéria ${i+1}/${count}:`, error);
+                    console.error(`❌ Erro ao criar bactéria ${i+1}:`, error);
                     console.error(error.stack);
                 }
             }
             
-            // Atualiza estatísticas
-            console.log(`Adicionadas ${this.bacteria.length - beforeCount} bactérias. Total: ${this.bacteria.length}`);
-            
-            // Atualiza o contador de bactérias
-            if (this.simulation.stats) {
-                this.simulation.stats.totalBacteria = this.bacteria.length;
-            }
         } catch (error) {
-            console.error("Erro geral ao adicionar bactérias:", error);
+            console.error("❌ Erro global na criação de bactérias:", error);
             console.error(error.stack);
         }
+        
+        // Verifica quantas bactérias foram adicionadas
+        const afterCount = this.bacteria ? this.bacteria.length : 0;
+        const addedCount = afterCount - beforeCount;
+        
+        console.log(`📊 RESUMO: Adicionadas ${addedCount}/${count} bactérias. Total atual: ${afterCount}`);
+        
+        // RADICAL: Faz uma atualização de todas as bactérias para garantir que estão se movendo
+        console.log(`🔄 Iniciando atualização forçada de todas as bactérias...`);
+        try {
+            if (this.bacteria && this.bacteria.length > 0) {
+                this.bacteria.forEach((bacteria, index) => {
+                    if (bacteria && bacteria.movement) {
+                        // Aplica um movimento aleatório forçado
+                        bacteria.movement.moveRandom(1, 2.0);
+                        console.log(`🔄 Movimento forçado aplicado à bactéria ${index + 1}`);
+                    }
+                });
+            }
+        } catch (massUpdateError) {
+            console.error(`⚠️ Erro na atualização forçada das bactérias:`, massUpdateError);
+        }
+        
+        // Notificação ao usuário
+        if (addedCount > 0) {
+            if (typeof createDiv === 'function') {
+                const notification = createDiv(`${addedCount} bactérias adicionadas com sucesso!`);
+                notification.position(10, 10);
+                notification.style('background-color', 'rgba(50, 205, 50, 0.8)');
+                notification.style('color', 'white');
+                notification.style('padding', '10px');
+                notification.style('border-radius', '5px');
+                notification.style('font-weight', 'bold');
+                
+                // Remove após 3 segundos
+                setTimeout(() => {
+                    notification.remove();
+                }, 3000);
+            }
+        } else {
+            console.error("❌ FALHA: Nenhuma bactéria foi adicionada!");
+            
+            if (typeof createDiv === 'function') {
+                const errorNotification = createDiv("Falha ao adicionar bactérias. Verifique o console.");
+                errorNotification.position(10, 10);
+                errorNotification.style('background-color', 'rgba(220, 50, 50, 0.8)');
+                errorNotification.style('color', 'white');
+                errorNotification.style('padding', '10px');
+                errorNotification.style('border-radius', '5px');
+                errorNotification.style('font-weight', 'bold');
+                
+                // Remove após 5 segundos
+                setTimeout(() => {
+                    errorNotification.remove();
+                }, 5000);
+            }
+        }
+        
+        return addedCount;
     }
     
     /**
@@ -536,6 +649,225 @@ class EntityManager {
             pop();
         } catch (error) {
             console.error("Erro ao desenhar bactérias mortas:", error);
+        }
+    }
+
+    /**
+     * Adiciona uma instância de bactéria já criada à simulação
+     * @param {Bacteria} bacteria - A instância de bactéria a ser adicionada
+     */
+    addBacteriaInstance(bacteria) {
+        if (!bacteria) {
+            console.warn("⚠️ Tentativa de adicionar uma bactéria indefinida");
+            return;
+        }
+        
+        // Garante que a bactéria tem uma posição válida
+        if (!bacteria.pos || typeof bacteria.pos.x !== 'number' || typeof bacteria.pos.y !== 'number' || 
+            isNaN(bacteria.pos.x) || isNaN(bacteria.pos.y)) {
+            console.warn("⚠️ Tentativa de adicionar bactéria com posição inválida, corrigindo...");
+            
+            // Criar posição válida
+            const safeX = random(width * 0.1, width * 0.9);
+            const safeY = random(height * 0.1, height * 0.9);
+            
+            // Usa createVector se disponível
+            if (typeof createVector === 'function') {
+                bacteria.pos = createVector(safeX, safeY);
+            } else {
+                bacteria.pos = { x: safeX, y: safeY };
+            }
+        }
+        
+        // Garante que a bactéria tem um sistema de movimento
+        if (!bacteria.movement) {
+            console.warn("⚠️ Bactéria sem sistema de movimento, tentando criar...");
+            try {
+                bacteria.movement = new BacteriaMovement(bacteria);
+            } catch (error) {
+                console.error("❌ Erro ao criar sistema de movimento:", error);
+            }
+        }
+        
+        // Garante que a bactéria tem uma referência à simulação
+        if (!bacteria.simulation) {
+            console.log("🔄 Definindo referência à simulação para a bactéria");
+            bacteria.simulation = this.simulation;
+        }
+        
+        // Indica na simulação que esta bactéria é válida
+        bacteria._validInSimulation = true;
+        
+        // Adiciona à lista de bactérias
+        this.bacteria.push(bacteria);
+        
+        // Atualiza estatísticas, se disponível
+        if (this.simulation && this.simulation.statsManager) {
+            this.simulation.statsManager.incrementStat('totalBacteria');
+        }
+        
+        console.log(`✅ Bactéria adicionada com sucesso, ID: ${bacteria.id}, Total: ${this.bacteria.length}`);
+    }
+
+    /**
+     * Inicializa a simulação e configura as propriedades
+     * @param {Simulation} simulation - Referência para a simulação
+     */
+    initializeSimulation(simulation) {
+        this.simulation = simulation;
+        
+        if (this.simulation) {
+            console.log('🚀 EntityManager: Inicializando configurações da simulação');
+            
+            // Configura a grade espacial
+            if (this.simulation.spatialGrid) {
+                this.spatialGrid = this.simulation.spatialGrid;
+                console.log('✅ EntityManager: Grade espacial configurada');
+            }
+            
+            // Define o callback de gerenciamento de recursos
+            this.handleResourceInteraction = (bacteria, foodItem) => {
+                this.simulation.handleFoodConsumption(bacteria, foodItem);
+            };
+            
+            // Define o callback para remoção de entidades
+            this.entityRemovalCallback = (entity) => {
+                this.simulation.handleEntityRemoval(entity);
+            };
+            
+            // Configura o sistema de energia e estatísticas
+            this.setupLifecycle();
+            
+            // Configura o sistema de doenças, se disponível
+            if (this.simulation.diseaseSystem) {
+                this.diseaseSystem = this.simulation.diseaseSystem;
+                console.log('✅ EntityManager: Sistema de doenças configurado');
+            }
+            
+            // Inicializa os callbacks adicionais da simulação
+            if (typeof this.simulation.postInitialize === 'function') {
+                this.simulation.postInitialize();
+                console.log('✅ EntityManager: Métodos adicionais da simulação inicializados');
+            }
+            
+            console.log('✅ EntityManager: Simulação inicializada com sucesso');
+        } else {
+            console.error('❌ EntityManager: Falha ao inicializar simulação - referência inválida');
+        }
+    }
+
+    /**
+     * Atualiza todas as entidades na simulação
+     * @param {number} deltaTime - Tempo desde último frame
+     */
+    update(deltaTime = 1) {
+        this.debugUpdateCycles = (this.debugUpdateCycles || 0) + 1;
+        
+        // Log a cada 60 frames para não sobrecarregar o console
+        const shouldLog = this.debugUpdateCycles % 60 === 0;
+        
+        if (shouldLog) {
+            console.log(`[EntityManager] Atualizando entidades - Frame: ${this.debugUpdateCycles}`);
+            console.log(`[EntityManager] Bactérias: ${this.bacteria ? this.bacteria.length : 0}`);
+        }
+        
+        try {
+            // Atualiza bactérias
+            if (this.bacteria && this.bacteria.length > 0) {
+                const bacteriaMoving = [];
+                
+                // Itera bactérias para atualização
+                for (let i = 0; i < this.bacteria.length; i++) {
+                    const bacteria = this.bacteria[i];
+                    
+                    if (!bacteria) {
+                        if (shouldLog) console.warn(`[EntityManager] Bactéria nula no índice ${i}, removendo...`);
+                        continue;
+                    }
+                    
+                    try {
+                        // Salva posição antes do update
+                        const prevPos = bacteria.pos ? { x: bacteria.pos.x, y: bacteria.pos.y } : null;
+                        
+                        // Atualiza a bactéria
+                        bacteria.update(deltaTime);
+                        
+                        // Verifica se a bactéria se moveu
+                        if (prevPos && bacteria.pos) {
+                            const dx = bacteria.pos.x - prevPos.x;
+                            const dy = bacteria.pos.y - prevPos.y;
+                            const distMoved = Math.sqrt(dx*dx + dy*dy);
+                            
+                            // Se a bactéria se moveu mais de 0.1 pixels, considera que houve movimento
+                            if (distMoved > 0.1) {
+                                bacteriaMoving.push({ id: bacteria.id, dist: distMoved });
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`[EntityManager] Erro ao atualizar bactéria ${i}:`, error);
+                    }
+                }
+                
+                // Registra quantas bactérias estão se movendo
+                if (shouldLog && bacteriaMoving.length > 0) {
+                    console.log(`[EntityManager] ${bacteriaMoving.length}/${this.bacteria.length} bactérias se movendo.`);
+                    // Mostra as primeiras 3 bactérias com movimento
+                    bacteriaMoving.slice(0, 3).forEach(b => {
+                        console.log(`[EntityManager] Bactéria ${b.id} moveu ${b.dist.toFixed(2)} pixels.`);
+                    });
+                }
+            } else if (shouldLog) {
+                console.warn("[EntityManager] Array de bactérias vazio ou indefinido");
+            }
+            
+            // Atualiza comida
+            if (this.food && this.food.length > 0) {
+                for (let i = 0; i < this.food.length; i++) {
+                    try {
+                        const food = this.food[i];
+                        if (food && typeof food.update === 'function') {
+                            food.update(deltaTime);
+                        }
+                    } catch (error) {
+                        console.error(`[EntityManager] Erro ao atualizar comida ${i}:`, error);
+                    }
+                }
+            }
+            
+            // Atualiza obstáculos
+            if (this.obstacles && this.obstacles.length > 0) {
+                for (let i = 0; i < this.obstacles.length; i++) {
+                    try {
+                        const obstacle = this.obstacles[i];
+                        if (obstacle && typeof obstacle.update === 'function') {
+                            obstacle.update(deltaTime);
+                        }
+                    } catch (error) {
+                        console.error(`[EntityManager] Erro ao atualizar obstáculo ${i}:`, error);
+                    }
+                }
+            }
+            
+            // Atualiza efeitos visuais
+            if (this.effects && this.effects.length > 0) {
+                // Filtra efeitos expirados
+                this.effects = this.effects.filter(effect => {
+                    try {
+                        if (!effect) return false;
+                        effect.update(deltaTime);
+                        return !effect.isExpired();
+                    } catch (error) {
+                        console.error(`[EntityManager] Erro ao atualizar efeito:`, error);
+                        return false;
+                    }
+                });
+            }
+            
+            // Processa colisões entre entidades
+            this.processCollisions();
+            
+        } catch (error) {
+            console.error("[EntityManager] Erro crítico no update:", error);
         }
     }
 }

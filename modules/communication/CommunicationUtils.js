@@ -43,21 +43,58 @@ class CommunicationUtils {
      * @returns {number} - Distância calculada
      */
     calculateDistance(b1, b2) {
-        if (!b1 || !b2 || !b1.pos || !b2.pos) return Infinity;
+        if (!b1 || !b2) return Infinity;
         
         try {
-            // Usa a função dist do p5.js se disponível
-            if (typeof dist === 'function') {
-                return dist(b1.pos.x, b1.pos.y, b2.pos.x, b2.pos.y);
+            // Verificação mais robusta para objetos de posição
+            if (!b1.pos || !b2.pos) {
+                console.warn("Objetos de posição ausentes ao calcular distância");
+                return Infinity;
             }
             
-            // Implementação manual como fallback
-            const dx = b1.pos.x - b2.pos.x;
-            const dy = b1.pos.y - b2.pos.y;
-            return Math.sqrt(dx * dx + dy * dy);
+            // Função auxiliar para extrair coordenada válida
+            const getValidCoord = (pos, coord) => {
+                // Se for um valor numérico direto, usa ele
+                if (typeof pos[coord] === 'number' && !isNaN(pos[coord])) {
+                    return pos[coord];
+                }
+                
+                // Se for um objeto, tenta extrair a coordenada interna
+                if (typeof pos[coord] === 'object' && pos[coord] !== null) {
+                    console.warn(`Detectado objeto aninhado em pos.${coord}:`, pos[coord]);
+                    
+                    // Tenta acessar a propriedade interna (ex: pos.x.x)
+                    if (typeof pos[coord][coord] === 'number' && !isNaN(pos[coord][coord])) {
+                        return pos[coord][coord];
+                    }
+                }
+                
+                // Se não conseguiu um valor válido, retorna NaN para sinalizar o problema
+                console.warn(`Não foi possível extrair coordenada válida para ${coord}`);
+                return NaN;
+            };
+            
+            // Extrai as coordenadas com validação
+            const x1 = getValidCoord(b1.pos, 'x');
+            const y1 = getValidCoord(b1.pos, 'y');
+            const x2 = getValidCoord(b2.pos, 'x');
+            const y2 = getValidCoord(b2.pos, 'y');
+            
+            // Se qualquer coordenada for inválida, retorna Infinity
+            if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) {
+                console.warn(`Coordenadas inválidas ao calcular distância: (${x1}, ${y1}) - (${x2}, ${y2})`);
+                return Infinity;
+            }
+            
+            // Calcula a distância euclidiana
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            return distance;
         } catch (error) {
             console.error("Erro ao calcular distância:", error);
-            return Infinity;
+            return Infinity; // Retorna Infinity em caso de erro para evitar problemas
         }
     }
     

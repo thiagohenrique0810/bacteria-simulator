@@ -236,19 +236,48 @@ class RenderSystem {
      * Desenha bactérias
      */
     drawBacteria() {
+        // Diagnóstico para verificar quantas bactérias existem
+        console.log(`🔍 DIAGNÓSTICO: Tentando desenhar ${this.simulation.entityManager.bacteria.length} bactérias`);
+        
+        if (this.simulation.entityManager.bacteria.length === 0) {
+            console.warn("⚠️ Array de bactérias vazio! Nenhuma bactéria para desenhar.");
+            return;
+        }
+        
         // Usa o método draw de cada bactéria para desenhar
-        for (const bacteria of this.simulation.entityManager.bacteria) {
+        for (let i = 0; i < this.simulation.entityManager.bacteria.length; i++) {
+            const bacteria = this.simulation.entityManager.bacteria[i];
+            
+            // Verifica se a bactéria é válida
+            if (!bacteria) {
+                console.warn(`⚠️ Bactéria no índice ${i} é undefined`);
+                continue;
+            }
+            
+            // Verifica se a posição é válida
+            if (!bacteria.pos || typeof bacteria.pos.x !== 'number' || typeof bacteria.pos.y !== 'number' || 
+                isNaN(bacteria.pos.x) || isNaN(bacteria.pos.y)) {
+                console.warn(`⚠️ Bactéria ${i} (ID: ${bacteria.id || 'desconhecido'}) tem posição inválida:`, bacteria.pos);
+                continue;
+            }
+            
             // Tenta chamar o método de desenho
-            if (bacteria.draw && typeof bacteria.draw === 'function') {
-                bacteria.draw();
-            } 
-            // Fallback se o método draw não existir
-            else {
-                push();
-                fill(bacteria.isFemale ? color(255, 150, 200) : color(150, 200, 255));
-                noStroke();
-                ellipse(bacteria.pos.x, bacteria.pos.y, bacteria.size, bacteria.size);
-                pop();
+            try {
+                if (bacteria.draw && typeof bacteria.draw === 'function') {
+                    console.log(`✏️ Desenhando bactéria ${i}: ID=${bacteria.id || '?'}, Pos=(${bacteria.pos.x}, ${bacteria.pos.y}), Tamanho=${bacteria.size || '?'}`);
+                    bacteria.draw();
+                } 
+                // Fallback se o método draw não existir
+                else {
+                    console.warn(`⚠️ Bactéria ${i} não tem método draw, usando fallback`);
+                    push();
+                    fill(bacteria.isFemale ? color(255, 150, 200) : color(150, 200, 255));
+                    noStroke();
+                    ellipse(bacteria.pos.x, bacteria.pos.y, bacteria.size || 20, bacteria.size || 20);
+                    pop();
+                }
+            } catch (error) {
+                console.error(`❌ Erro ao desenhar bactéria ${i}:`, error);
             }
         }
     }

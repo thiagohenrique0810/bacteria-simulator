@@ -242,145 +242,486 @@ window.SimulationControls = class SimulationControls extends ControlsBase {
         this.clearChatButton.mouseOver(() => this.clearChatButton.style('background-color', '#e55c5c'));
         this.clearChatButton.mouseOut(() => this.clearChatButton.style('background-color', '#ff6b6b'));
         this.chatButtonsDiv.child(this.clearChatButton);
+
+        // NOVA SEÇÃO: Controles visuais para as bactérias
+        const visualControlsDiv = this.createSection(this.container, 'Controles Visuais');
+        visualControlsDiv.style('margin-top', '20px');
+        visualControlsDiv.style('background-color', 'rgba(75, 0, 130, 0.2)');
+        visualControlsDiv.style('border-radius', '8px');
+        visualControlsDiv.style('border', '2px solid rgba(147, 112, 219, 0.5)');
+        visualControlsDiv.style('padding', '15px');
+        
+        // Trilhas de movimento
+        const trailsGroup = createDiv();
+        trailsGroup.style('margin-bottom', '15px');
+        trailsGroup.style('padding-bottom', '15px');
+        trailsGroup.style('border-bottom', '1px solid rgba(147, 112, 219, 0.3)');
+        visualControlsDiv.child(trailsGroup);
+        
+        // Cabeçalho: Trilhas
+        const trailsHeader = createDiv('Trilhas de Movimento');
+        trailsHeader.style('font-weight', 'bold');
+        trailsHeader.style('margin-bottom', '10px');
+        trailsHeader.style('color', '#c8a2c8');
+        trailsGroup.child(trailsHeader);
+        
+        // Checkbox para habilitar/desabilitar trilhas
+        this.showTrailsCheckbox = createCheckbox('Mostrar trilhas', true);
+        this.showTrailsCheckbox.style('margin-bottom', '8px');
+        this.showTrailsCheckbox.style('color', '#e6e6fa');
+        trailsGroup.child(this.showTrailsCheckbox);
+        
+        // Opacidade das trilhas
+        this.trailOpacitySlider = createSlider(0.1, 1.0, 0.6, 0.1);
+        const trailOpacityRow = this.addControlRow(trailsGroup, 'Opacidade:', this.trailOpacitySlider);
+        trailOpacityRow.style('margin-bottom', '8px');
+        trailOpacityRow.style('color', '#e6e6fa');
+        
+        // Comprimento das trilhas
+        this.trailLengthSlider = createSlider(5, 50, 30, 5);
+        const trailLengthRow = this.addControlRow(trailsGroup, 'Comprimento:', this.trailLengthSlider);
+        trailLengthRow.style('margin-bottom', '8px');
+        trailLengthRow.style('color', '#e6e6fa');
+        
+        // Grupo: Tipos de bactérias
+        const bacteriaTypesGroup = createDiv();
+        bacteriaTypesGroup.style('margin-bottom', '15px');
+        visualControlsDiv.child(bacteriaTypesGroup);
+        
+        // Cabeçalho: Tipos de bactérias
+        const typesHeader = createDiv('Tipos de Bactérias');
+        typesHeader.style('font-weight', 'bold');
+        typesHeader.style('margin-bottom', '10px');
+        typesHeader.style('color', '#c8a2c8');
+        bacteriaTypesGroup.child(typesHeader);
+        
+        // Descrição
+        const typesDescription = createDiv('Selecione a distribuição dos tipos de bactérias');
+        typesDescription.style('font-size', '12px');
+        typesDescription.style('color', '#e6e6fa');
+        typesDescription.style('margin-bottom', '10px');
+        bacteriaTypesGroup.child(typesDescription);
+        
+        // Controles deslizantes para cada tipo de bactéria
+        // Bacilos
+        this.bacilosSlider = createSlider(0, 100, 25, 5);
+        const bacilosRow = this.addControlRow(bacteriaTypesGroup, 'Bacilos (%):', this.bacilosSlider);
+        bacilosRow.style('margin-bottom', '5px');
+        bacilosRow.style('color', '#e6e6fa');
+        
+        // Cocos
+        this.cocosSlider = createSlider(0, 100, 25, 5);
+        const cocosRow = this.addControlRow(bacteriaTypesGroup, 'Cocos (%):', this.cocosSlider);
+        cocosRow.style('margin-bottom', '5px');
+        cocosRow.style('color', '#e6e6fa');
+        
+        // Espirilos
+        this.espirilosSlider = createSlider(0, 100, 25, 5);
+        const espirilosRow = this.addControlRow(bacteriaTypesGroup, 'Espirilos (%):', this.espirilosSlider);
+        espirilosRow.style('margin-bottom', '5px');
+        espirilosRow.style('color', '#e6e6fa');
+        
+        // Vibriões
+        this.vibrioesSlider = createSlider(0, 100, 25, 5);
+        const vibrioesRow = this.addControlRow(bacteriaTypesGroup, 'Vibriões (%):', this.vibrioesSlider);
+        vibrioesRow.style('margin-bottom', '5px');
+        vibrioesRow.style('color', '#e6e6fa');
+        
+        // Botão para aplicar distribuição personalizada
+        this.applyTypesButton = createButton('Aplicar aos Novos');
+        this.applyTypesButton.style('margin-top', '10px');
+        this.applyTypesButton.style('padding', '5px 10px');
+        this.applyTypesButton.style('background', '#9370db');
+        this.applyTypesButton.style('color', 'white');
+        this.applyTypesButton.style('border', 'none');
+        this.applyTypesButton.style('border-radius', '4px');
+        this.applyTypesButton.style('cursor', 'pointer');
+        this.applyTypesButton.mouseOver(() => this.applyTypesButton.style('background', '#8a66cc'));
+        this.applyTypesButton.mouseOut(() => this.applyTypesButton.style('background', '#9370db'));
+        bacteriaTypesGroup.child(this.applyTypesButton);
     }
 
     /**
-     * Configura os event listeners
+     * Configura os event listeners para os controles
+     * @param {Object} callbacks - Objeto com funções de callback
      */
     setupEventListeners(callbacks) {
-        if (!callbacks) return;
+        console.log('🔧 Configurando event listeners para os controles da simulação');
 
-        // Configura os botões principais
+        // Configura o botão de pausar
         this.pauseButton.mousePressed(() => {
-            const isPaused = this.pauseButton.html() === 'Continuar';
-            this.pauseButton.html(isPaused ? 'Pausar' : 'Continuar');
-            if (callbacks.onPauseToggle) {
-                callbacks.onPauseToggle(!isPaused);
+            const isPaused = togglePause();
+            this.pauseButton.html(isPaused ? 'Continuar' : 'Pausar');
+            if (callbacks && callbacks.onPauseToggle) {
+                callbacks.onPauseToggle(isPaused);
             }
         });
 
+        // Configura o botão de reiniciar
         this.resetButton.mousePressed(() => {
-            if (confirm('Tem certeza que deseja reiniciar a simulação?')) {
-                if (callbacks.onReset) {
-                    callbacks.onReset();
-                }
+            if (callbacks && callbacks.onReset) {
+                callbacks.onReset();
             }
         });
 
-        // Função auxiliar para notificar mudanças
-        const notifyChange = () => {
-            if (callbacks.onChange) {
-                callbacks.onChange(this.getState());
-            }
-        };
-
-        // Eventos de simulação
+        // Slider de velocidade
         this.speedSlider.input(() => {
-            if (callbacks.onSpeedChange) {
-                callbacks.onSpeedChange(this.speedSlider.value());
+            const value = this.speedSlider.value();
+            if (callbacks && callbacks.onSpeedChange) {
+                callbacks.onSpeedChange(value);
             }
-            notifyChange();
         });
 
-        // Eventos para os sliders de população inicial e proporção de fêmeas
+        // Sliders de parâmetros de bactérias
         this.initialBacteriaSlider.input(() => {
-            // Atualiza o texto do contador
-            this.initialBacteriaValue.html(this.initialBacteriaSlider.value());
-            notifyChange();
+            const value = parseInt(this.initialBacteriaSlider.value());
+            this.initialBacteriaValue.html(value);
+            if (callbacks && callbacks.onChange) {
+                callbacks.onChange({ initialBacteria: value });
+            }
         });
-        
+
+        // Slider de proporção de fêmeas
         this.femaleRatioSlider.input(() => {
-            // Atualiza o texto do contador
-            this.femaleRatioValue.html(this.femaleRatioSlider.value() + '%');
-            notifyChange();
-        });
-        
-        // Eventos para os controles de adicionar bactérias
-        this.addBacteriaAmountSlider.input(() => {
-            // Atualiza o texto do contador
-            this.addBacteriaAmountValue.html(this.addBacteriaAmountSlider.value());
-        });
-        
-        this.addBacteriaFemaleRatioSlider.input(() => {
-            // Atualiza o texto do contador
-            this.addBacteriaFemaleRatioValue.html(this.addBacteriaFemaleRatioSlider.value() + '%');
+            const value = parseInt(this.femaleRatioSlider.value());
+            this.femaleRatioValue.html(value + '%');
+            if (callbacks && callbacks.onChange) {
+                callbacks.onChange({ femaleRatio: value });
+            }
         });
 
+        // Slider de limite de população
         this.populationLimitSlider.input(() => {
-            // Atualiza o texto do contador
-            this.popLimitValue.html(this.populationLimitSlider.value());
-            notifyChange();
+            const value = parseInt(this.populationLimitSlider.value());
+            this.popLimitValue.html(value);
+            if (callbacks && callbacks.onChange) {
+                callbacks.onChange({ populationLimit: value });
+            }
         });
 
-        this.initialEnergySlider.input(notifyChange);
+        // Slider de energia inicial
+        this.initialEnergySlider.input(() => {
+            const value = parseInt(this.initialEnergySlider.value());
+            if (callbacks && callbacks.onChange) {
+                callbacks.onChange({ initialEnergy: value });
+            }
+        });
+
+        // Slider de tempo de vida
         this.lifespanSlider.input(() => {
-            if (callbacks.onLifespanChange) {
-                callbacks.onLifespanChange(this.lifespanSlider.value() * 3600);
+            const value = parseInt(this.lifespanSlider.value()) * 3600; // Converte horas para segundos
+            if (callbacks && callbacks.onLifespanChange) {
+                callbacks.onLifespanChange(value);
             }
-            notifyChange();
         });
 
+        // Slider de perda de saúde
         this.healthLossSlider.input(() => {
-            if (callbacks.onHealthLossChange) {
-                callbacks.onHealthLossChange(this.healthLossSlider.value());
+            const value = parseFloat(this.healthLossSlider.value());
+            if (callbacks && callbacks.onHealthLossChange) {
+                callbacks.onHealthLossChange(value);
             }
-            notifyChange();
         });
 
+        // Slider de intervalo de alimentação
         this.feedingIntervalSlider.input(() => {
-            if (callbacks.onFeedingIntervalChange) {
-                callbacks.onFeedingIntervalChange(this.feedingIntervalSlider.value() * 60);
+            const value = parseInt(this.feedingIntervalSlider.value()) * 60; // Converte minutos para segundos
+            if (callbacks && callbacks.onFeedingIntervalChange) {
+                callbacks.onFeedingIntervalChange(value);
             }
-            notifyChange();
         });
 
-        // Eventos para os botões de controle do chat
-        this.toggleChatButton.mousePressed(() => {
-            // Referência ao chat
-            const chatElement = document.getElementById('bacteria-chat');
-            if (chatElement) {
-                // Verifica o estado atual
-                const isVisible = chatElement.style.display !== 'none';
+        // Configura o botão de adicionar bactérias
+        console.log('🔧 Tentando configurar o botão de adicionar bactérias...');
+        
+        if (!this.addBacteriaButton) {
+            console.error('❌ ERRO: Botão addBacteriaButton não está definido em this');
+            console.log('🔍 Tentando recuperar o botão pelo DOM...');
+            
+            // Tenta encontrar pelo DOM
+            try {
+                const buttonSelector = 'button:contains("Adicionar Bactérias")';
+                const buttonElements = document.querySelectorAll('button');
+                let found = false;
                 
-                if (isVisible) {
-                    // Esconde o chat
-                    chatElement.style.display = 'none';
-                    this.toggleChatButton.html('Mostrar Chat');
-                    // Reajusta o layout do canvas se necessário
-                    if (window.windowResized) window.windowResized();
-                } else {
-                    // Mostra o chat
-                    chatElement.style.display = 'flex';
-                    this.toggleChatButton.html('Esconder Chat');
-                    // Reajusta o layout do canvas se necessário
-                    if (window.windowResized) window.windowResized();
+                console.log(`🔍 Encontrados ${buttonElements.length} botões no DOM`);
+                
+                buttonElements.forEach((btn, index) => {
+                    const text = btn.innerText || btn.textContent;
+                    console.log(`Botão ${index}: "${text}"`);
+                    
+                    if (text && text.includes('Adicionar Bactérias')) {
+                        console.log(`✅ Botão encontrado: "${text}"`);
+                        this.addBacteriaButton = btn;
+                        found = true;
+                    }
+                });
+                
+                if (!found) {
+                    console.log('🔍 Não foi possível encontrar o botão pelo texto, tentando usar p5.js...');
+                    // Se estamos usando p5.js, podemos tentar recuperar pelo seletor específico
+                    const p5buttons = selectAll('button');
+                    p5buttons.forEach((btn, index) => {
+                        const text = btn.html();
+                        if (text && text.includes('Adicionar Bactérias')) {
+                            console.log(`✅ Botão encontrado via p5.js: "${text}"`);
+                            this.addBacteriaButton = btn.elt;
+                            found = true;
+                        }
+                    });
+                }
+                
+                if (!found) {
+                    console.error('❌ ERRO: Não foi possível encontrar o botão de nenhuma forma');
+                    this.createEmergencyButton(callbacks);
+                    return;
+                }
+            } catch (error) {
+                console.error('❌ ERRO ao tentar recuperar o botão:', error);
+                this.createEmergencyButton(callbacks);
+                return;
+            }
+        }
+        
+        try {
+            console.log('🔧 Configurando listener para:', this.addBacteriaButton);
+            
+            // Verificar se estamos lidando com um elemento DOM ou um objeto p5.js
+            const isP5Button = this.addBacteriaButton.elt !== undefined;
+            
+            if (isP5Button) {
+                // Se for um objeto p5.js, configuramos o evento mousePressed
+                console.log('🔍 Detectado como objeto p5.js, usando mousePressed');
+                this.addBacteriaButton.mousePressed(() => {
+                    console.log('🖱️ Botão de adicionar bactérias foi clicado! (via p5.js)');
+                    
+                    // Obter valores dos sliders apropriados
+                    const count = parseInt(this.addBacteriaAmountSlider.value() || 10);
+                    const femaleRatio = parseFloat(this.addBacteriaFemaleRatioSlider.value() || 50);
+                    
+                    console.log(`📊 Valores a serem enviados: ${count} bactérias, ${femaleRatio}% fêmeas`);
+                    
+                    if (callbacks && typeof callbacks.onAddBacteria === 'function') {
+                        callbacks.onAddBacteria(count, femaleRatio);
+                        console.log('✅ Callback onAddBacteria executado');
+                    } else {
+                        console.error('❌ Callback onAddBacteria não está disponível');
+                        this.tryAlternativeMethods(count, femaleRatio);
+                    }
+                });
+            } else {
+                // Se for um elemento DOM nativo, podemos usar cloneNode e addEventListener
+                console.log('🔍 Detectado como elemento DOM nativo, usando addEventListener');
+                
+                // Remover listeners antigos para evitar duplicação
+                const newButton = this.addBacteriaButton.cloneNode(true);
+                if (this.addBacteriaButton.parentNode) {
+                    this.addBacteriaButton.parentNode.replaceChild(newButton, this.addBacteriaButton);
+                    this.addBacteriaButton = newButton;
+                }
+                
+                // Configura o event listener
+                this.addBacteriaButton.addEventListener('click', () => {
+                    console.log('🖱️ Botão de adicionar bactérias foi clicado! (via DOM)');
+                    
+                    // Obter valores dos sliders apropriados
+                    const count = parseInt(this.addBacteriaAmountSlider.value() || 10);
+                    const femaleRatio = parseFloat(this.addBacteriaFemaleRatioSlider.value() || 50);
+                    
+                    console.log(`📊 Valores a serem enviados: ${count} bactérias, ${femaleRatio}% fêmeas`);
+                    
+                    if (callbacks && typeof callbacks.onAddBacteria === 'function') {
+                        callbacks.onAddBacteria(count, femaleRatio);
+                        console.log('✅ Callback onAddBacteria executado');
+                    } else {
+                        console.error('❌ Callback onAddBacteria não está disponível');
+                        this.tryAlternativeMethods(count, femaleRatio);
+                    }
+                });
+            }
+            
+            console.log('✅ Botão de adicionar bactérias configurado com sucesso');
+        } catch (error) {
+            console.error('❌ ERRO ao configurar botão de adicionar bactérias:', error);
+            this.createEmergencyButton(callbacks);
+        }
+
+        // Checkbox para mostrar trilhas
+        const showTrailsCheckbox = document.getElementById('show-trails-checkbox');
+        if (showTrailsCheckbox && callbacks.onShowTrailsChange) {
+            showTrailsCheckbox.addEventListener('change', () => {
+                callbacks.onShowTrailsChange(showTrailsCheckbox.checked);
+            });
+        }
+
+        // Configuração dos outros controles continua normalmente...
+    }
+    
+    /**
+     * Cria um botão de emergência para adicionar bactérias
+     * @param {Object} callbacks - Callbacks para os controles
+     */
+    createEmergencyButton(callbacks) {
+        console.log('🚨 Criando botão de emergência para adicionar bactérias');
+        
+        try {
+            // Cria um botão de emergência usando p5.js
+            const emergencyButton = createButton('⚠️ Adicionar Bactérias (Emergência)');
+            emergencyButton.position(20, 20);
+            emergencyButton.size(250, 40);
+            emergencyButton.style('background-color', '#ff5722');
+            emergencyButton.style('color', 'white');
+            emergencyButton.style('border', 'none');
+            emergencyButton.style('border-radius', '4px');
+            emergencyButton.style('cursor', 'pointer');
+            emergencyButton.style('font-weight', 'bold');
+            emergencyButton.style('font-size', '14px');
+            emergencyButton.style('z-index', '9999');
+            emergencyButton.style('box-shadow', '0 4px 8px rgba(0,0,0,0.3)');
+            
+            // Adiciona evento de clique
+            emergencyButton.mousePressed(() => {
+                console.log('🖱️ Botão de emergência foi clicado!');
+                
+                // Usa valores padrão para o botão de emergência
+                const count = 10;
+                const femaleRatio = 50;
+                
+                if (callbacks && typeof callbacks.onAddBacteria === 'function') {
+                    callbacks.onAddBacteria(count, femaleRatio);
+                } else if (window.simulation && window.simulation.controlSystem && 
+                    typeof window.simulation.controlSystem.handleButtonAddBacteria === 'function') {
+                    window.simulation.controlSystem.handleButtonAddBacteria();
+                } else if (window.simulation && window.simulation.entityManager && 
+                    typeof window.simulation.entityManager.addMultipleBacteria === 'function') {
+                    window.simulation.entityManager.addMultipleBacteria(count, femaleRatio);
+                }
+            });
+            
+            console.log('✅ Botão de emergência criado com sucesso');
+        } catch (error) {
+            console.error('❌ ERRO ao criar botão de emergência:', error);
+        }
+    }
+
+    /**
+     * Obtém a distribuição atual dos tipos de bactérias
+     * @returns {Object} Objeto com as proporções de cada tipo de bactéria
+     */
+    getBacteriaTypeDistribution() {
+        const distribution = {
+            bacilos: parseFloat(document.getElementById('bacilos-slider')?.value || 25) / 100,
+            cocos: parseFloat(document.getElementById('cocos-slider')?.value || 25) / 100,
+            espirilos: parseFloat(document.getElementById('espirilos-slider')?.value || 25) / 100,
+            vibrioes: parseFloat(document.getElementById('vibrioes-slider')?.value || 25) / 100
+        };
+        
+        return distribution;
+    }
+
+    /**
+     * Configura os sliders de tipos de bactérias para manter o total em 100%
+     * @param {Object} callbacks - Objeto com as funções de callback
+     */
+    setupBacteriaTypeSliders(callbacks) {
+        const sliderIds = ['bacilos-slider', 'cocos-slider', 'espirilos-slider', 'vibrioes-slider'];
+        const valueIds = ['bacilos-value', 'cocos-value', 'espirilos-value', 'vibrioes-value'];
+        
+        // Configurar cada slider
+        sliderIds.forEach((sliderId, index) => {
+            const slider = document.getElementById(sliderId);
+            const valueElement = document.getElementById(valueIds[index]);
+            
+            if (slider && valueElement) {
+                slider.addEventListener('input', () => {
+                    // Atualiza o valor exibido
+                    const value = parseInt(slider.value);
+                    valueElement.textContent = value + '%';
+                    
+                    // Ajusta os outros sliders para manter o total em 100%
+                    this.updateOtherSliders(sliderId, value, sliderIds, valueIds);
+                });
+            }
+        });
+    }
+
+    /**
+     * Atualiza os outros sliders para manter o total em 100%
+     * @param {string} currentSliderId - ID do slider que está sendo ajustado
+     * @param {number} currentValue - Valor atual do slider
+     * @param {Array<string>} allSliderIds - Array com todos os IDs de sliders
+     * @param {Array<string>} allValueIds - Array com todos os IDs de elementos de valor
+     */
+    updateOtherSliders(currentSliderId, currentValue, allSliderIds, allValueIds) {
+        // Calcula o total atual de todos os sliders
+        let total = 0;
+        const sliders = {};
+        
+        allSliderIds.forEach(id => {
+            const slider = document.getElementById(id);
+            if (slider) {
+                sliders[id] = slider;
+                total += parseInt(slider.value);
+            }
+        });
+
+        // Se o total não for 100, ajuste os outros sliders proporcionalmente
+        if (total !== 100) {
+            const excess = total - 100;
+            if (excess !== 0) {
+                // Calcula quanto cada slider (exceto o atual) deve ser ajustado
+                const otherSlidersCount = allSliderIds.length - 1;
+                if (otherSlidersCount > 0) {
+                    // Distribui o excesso igualmente entre os outros sliders
+                    let remainingExcess = excess;
+                    const otherSliderIds = allSliderIds.filter(id => id !== currentSliderId);
+                    
+                    // Ordena os sliders do maior para o menor para ajustar primeiro os maiores
+                    otherSliderIds.sort((a, b) => parseInt(sliders[b].value) - parseInt(sliders[a].value));
+                    
+                    // Ajusta cada slider, garantindo que nenhum fique negativo
+                    for (let i = 0; i < otherSliderIds.length; i++) {
+                        const id = otherSliderIds[i];
+                        const slider = sliders[id];
+                        const valueElement = document.getElementById(allValueIds[allSliderIds.indexOf(id)]);
+                        
+                        let adjustment = Math.round(remainingExcess / (otherSliderIds.length - i));
+                        let newValue = Math.max(0, parseInt(slider.value) - adjustment);
+                        
+                        // Não permitir que o slider seja menor que 0
+                        if (newValue < 0) newValue = 0;
+                        
+                        // Não permitir ajustes que excederiam o valor limite
+                        if (parseInt(slider.value) - newValue > remainingExcess) {
+                            newValue = parseInt(slider.value) - remainingExcess;
+                        }
+                        
+                        // Atualiza o valor do slider e o texto
+                        slider.value = newValue;
+                        if (valueElement) valueElement.textContent = newValue + '%';
+                        
+                        // Atualiza o excesso restante
+                        remainingExcess -= (parseInt(slider.value) - newValue);
+                    }
+                    
+                    // Verifica novamente o total e ajusta o último slider se necessário
+                    let finalTotal = parseInt(sliders[currentSliderId].value);
+                    otherSliderIds.forEach(id => {
+                        finalTotal += parseInt(sliders[id].value);
+                    });
+                    
+                    if (finalTotal !== 100 && otherSliderIds.length > 0) {
+                        const lastId = otherSliderIds[otherSliderIds.length - 1];
+                        const lastSlider = sliders[lastId];
+                        const lastValueElement = document.getElementById(allValueIds[allSliderIds.indexOf(lastId)]);
+                        
+                        const finalAdjustment = 100 - finalTotal;
+                        lastSlider.value = parseInt(lastSlider.value) + finalAdjustment;
+                        if (lastValueElement) lastValueElement.textContent = lastSlider.value + '%';
+                    }
                 }
             }
-        });
-        
-        this.clearChatButton.mousePressed(() => {
-            // Referência ao sistema de comunicação
-            if (window.communication && typeof window.communication.clearChat === 'function') {
-                window.communication.clearChat();
-            }
-        });
-
-        // Evento do botão de adicionar bactérias
-        this.addBacteriaButton.mousePressed(() => {
-            console.log("Botão de adicionar bactérias clicado!");
-            console.log("Quantidade:", this.addBacteriaAmountSlider.value());
-            console.log("Proporção de fêmeas:", this.addBacteriaFemaleRatioSlider.value(), "%");
-            
-            if (callbacks.onAddBacteria) {
-                console.log("Callback onAddBacteria disponível, chamando...");
-                callbacks.onAddBacteria(
-                    this.addBacteriaAmountSlider.value(),
-                    this.addBacteriaFemaleRatioSlider.value()
-                );
-            } else {
-                console.error("Callback onAddBacteria NÃO está disponível!");
-            }
-        });
+        }
     }
 
     /**
@@ -397,5 +738,31 @@ window.SimulationControls = class SimulationControls extends ControlsBase {
             initialBacteria: Number(this.initialBacteriaSlider?.value()) || 20,
             femaleRatio: Number(this.femaleRatioSlider?.value()) || 50
         };
+    }
+
+    /**
+     * Tenta métodos alternativos para adicionar bactérias quando o callback não está disponível
+     * @param {number} count - Número de bactérias a adicionar
+     * @param {number} femaleRatio - Porcentagem de fêmeas (0-100)
+     */
+    tryAlternativeMethods(count, femaleRatio) {
+        // Tentar usar a função global disponível no SimulationControlSystem
+        if (window.simulation && window.simulation.controlSystem && 
+            typeof window.simulation.controlSystem.handleButtonAddBacteria === 'function') {
+            console.log('🔄 Tentando usar handleButtonAddBacteria do controlSystem');
+            window.simulation.controlSystem.handleButtonAddBacteria();
+            return true;
+        } 
+        
+        // Tentar chamar diretamente o método do entityManager
+        if (window.simulation && window.simulation.entityManager && 
+            typeof window.simulation.entityManager.addMultipleBacteria === 'function') {
+            console.log('🔄 Tentando usar entityManager.addMultipleBacteria diretamente');
+            window.simulation.entityManager.addMultipleBacteria(count, femaleRatio);
+            return true;
+        }
+        
+        console.error('❌ Não foi possível encontrar um método alternativo para adicionar bactérias');
+        return false;
     }
 }; 

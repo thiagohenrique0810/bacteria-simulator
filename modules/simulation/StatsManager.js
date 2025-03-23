@@ -197,6 +197,75 @@ class StatsManager {
         text(`Mortes: ${this.stats.deaths}`, 10, y); y += 20;
         text(`Comida: ${this.stats.foodConsumed}`, 10, y);
     }
+
+    /**
+     * Incrementa um valor específico de estatística
+     * @param {string} statName - Nome da estatística a ser incrementada
+     * @param {number} value - Valor a ser adicionado (padrão: 1)
+     */
+    incrementStat(statName, value = 1) {
+        if (!this.stats) {
+            console.warn("Estatísticas não inicializadas ao tentar incrementar", statName);
+            return;
+        }
+        
+        if (statName in this.stats) {
+            this.stats[statName] += value;
+            console.log(`Estatística "${statName}" incrementada para ${this.stats[statName]}`);
+        } else {
+            console.warn(`Estatística "${statName}" não encontrada no gerenciador de estatísticas`);
+        }
+    }
+    
+    /**
+     * Método de atualização chamado a cada frame da simulação
+     */
+    update() {
+        this.updateStats();
+    }
+    
+    /**
+     * Método de desenho chamado a cada frame da simulação
+     */
+    draw() {
+        this.drawStats();
+    }
+    
+    /**
+     * Adiciona um ponto de dados para uma estatística específica
+     * @param {string} statName - Nome da estatística
+     * @param {number} value - Valor a ser registrado
+     */
+    addDataPoint(statName, value) {
+        try {
+            // Se a estatística não existir, cria um array para ela
+            if (!this.dataPoints) {
+                this.dataPoints = {};
+            }
+            
+            if (!this.dataPoints[statName]) {
+                this.dataPoints[statName] = [];
+            }
+            
+            // Adiciona o valor ao array de dados
+            this.dataPoints[statName].push({
+                time: Date.now(),
+                value: value
+            });
+            
+            // Limita o array a 100 pontos para evitar crescimento infinito
+            if (this.dataPoints[statName].length > 100) {
+                this.dataPoints[statName].shift();
+            }
+            
+            // Também atualiza o valor atual no objeto stats se ele existir
+            if (this.stats && statName in this.stats) {
+                this.stats[statName] = value;
+            }
+        } catch (error) {
+            console.warn(`Erro ao adicionar ponto de dados para "${statName}":`, error);
+        }
+    }
 }
 
 // Torna a classe disponível globalmente

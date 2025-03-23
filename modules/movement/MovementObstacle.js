@@ -61,6 +61,7 @@ class MovementObstacle {
         // Ponto mais próximo
         let nearestObstacle = null;
         let nearestDistance = Infinity;
+        let colisionDetected = false;
 
         for (let obstacle of obstacles) {
             // Verifica se o obstáculo é uma instância válida
@@ -69,6 +70,9 @@ class MovementObstacle {
                 continue;
             }
 
+            // Verifica também se a linha de movimento colide com o obstáculo
+            const lineCollision = obstacle.lineCollides(this.base.position, ahead, size * 1.2);
+            
             // Verifica colisão com todos os pontos à frente
             const collisionAhead = obstacle.collidesWith(ahead, size * 1.2);
             const collisionAheadHalf = obstacle.collidesWith(aheadHalf, size * 1.2);
@@ -77,7 +81,24 @@ class MovementObstacle {
             // Verifica também a colisão com a posição atual para capturar colisões já ocorrendo
             const collisionCurrent = obstacle.collidesWith(this.base.position, size * 1.2);
             
-            if (collisionAhead || collisionAheadHalf || collisionAheadAngled || collisionCurrent) {
+            // Força a bactéria para fora se estiver dentro do obstáculo
+            const wasInObstacle = obstacle.pushEntityOut(this.base, size * 1.0);
+            if (wasInObstacle) {
+                colisionDetected = true;
+                // Reduz a velocidade moderadamente (não zera)
+                this.base.velocity.mult(0.6);
+                
+                // Garante velocidade mínima após colisão
+                if (this.base.velocity.mag() < 0.5) {
+                    const randomDirection = p5.Vector.random2D();
+                    randomDirection.mult(0.5);
+                    this.base.velocity.add(randomDirection);
+                }
+            }
+            
+            if (collisionAhead || collisionAheadHalf || collisionAheadAngled || collisionCurrent || lineCollision) {
+                colisionDetected = true;
+                
                 // Calcula distância até o obstáculo
                 const obstacleCenter = createVector(
                     obstacle.x + obstacle.w/2,
@@ -106,14 +127,14 @@ class MovementObstacle {
             // Ajusta a força de escape baseado na proximidade
             // Quanto mais próximo, mais forte a repulsão
             const distanceFactor = Math.max(1.0, Math.min(5.0, 5 * (1 - nearestDistance / (lookAheadDist * 2))));
-            escape.mult(this.avoidForce * distanceFactor * 3.5);
+            escape.mult(this.avoidForce * distanceFactor * 3.0); // Reduzido de 3.5 para 3.0
             
             // Aplica a força de fuga
             this.base.applyForce(escape);
             
-            // Se estiver muito próximo, reduz drasticamente a velocidade e aplica força adicional
+            // Se estiver muito próximo, reduz velocidade (menos drasticamente) e aplica força adicional
             if (nearestDistance < size * 2.5) {
-                this.base.velocity.mult(0.5); // Redução mais agressiva
+                this.base.velocity.mult(0.7); // Redução menos agressiva (antes era 0.5)
                 
                 // Aplica força adicional perpendicular à direção atual para tentar desviar
                 const perpVector = createVector(-this.base.velocity.y, this.base.velocity.x);
@@ -121,14 +142,28 @@ class MovementObstacle {
                 perpVector.mult(this.avoidForce * 2);
                 this.base.applyForce(perpVector);
                 
+                // Adiciona um pouco de aleatoriedade para evitar ficar preso
+                const randomVector = p5.Vector.random2D();
+                randomVector.mult(this.avoidForce * 0.5);
+                this.base.applyForce(randomVector);
+                
+                // Garante velocidade mínima após multiplicação
+                if (this.base.velocity.mag() < 0.5) {
+                    const minVelocity = p5.Vector.random2D();
+                    minVelocity.mult(0.5);
+                    this.base.velocity.add(minVelocity);
+                }
+                
                 // Log para debugging
-                console.log(`Obstáculo muito próximo! Distância: ${nearestDistance.toFixed(2)}, Aplicando força perpendicular`);
+                if (frameCount % 60 === 0) {
+                    console.log(`Obstáculo muito próximo! Distância: ${nearestDistance.toFixed(2)}, Aplicando força perpendicular`);
+                }
             }
             
             return true;
         }
         
-        return false;
+        return colisionDetected;
     }
     
     /**
@@ -149,33 +184,73 @@ class MovementObstacle {
             // Verifica se o obstáculo é uma instância válida
             if (!(obstacle instanceof window.Obstacle)) continue;
             
-            // Verificação mais precisa de colisão
-            const colliding = obstacle.collidesWith(this.base.position, size * 0.8);
+            // Usa o novo método pushEntityOut para garantir que a entidade seja forçada para fora
+            const wasInObstacle = obstacle.pushEntityOut(this.base, size * 0.8);
             
-            if (colliding) {
+            if (wasInObstacle) {
                 inCollision = true;
                 
-                // Calcula vetor de saída da colisão
-                const obstacleCenter = createVector(
-                    obstacle.x + obstacle.w/2,
-                    obstacle.y + obstacle.h/2
-                );
+                // Reduz a velocidade moderadamente (não zera)
+                this.base.velocity.mult(0.6);
                 
-                const escapeVector = p5.Vector.sub(this.base.position, obstacleCenter);
-                escapeVector.normalize();
+                // Adiciona um componente aleatório para evitar ficar preso
+                const randomEscape = p5.Vector.random2D();
+                randomEscape.mult(this.avoidForce * 0.5);
+                this.base.applyForce(randomEscape);
                 
-                // Força muito maior para sair da colisão
-                escapeVector.mult(this.avoidForce * 4.0); 
+                // Garante velocidade mínima após redução
+                if (this.base.velocity.mag() < 0.5) {
+                    const escapeDirection = p5.Vector.sub(
+                        this.base.position,
+                        createVector(obstacle.x + obstacle.w/2, obstacle.y + obstacle.h/2)
+                    );
+                    escapeDirection.normalize();
+                    escapeDirection.mult(0.8);
+                    this.base.velocity.add(escapeDirection);
+                }
                 
-                // Aplica a força e também move diretamente a posição para garantir saída imediata
-                this.base.applyForce(escapeVector);
-                this.base.position.add(p5.Vector.mult(escapeVector, 0.5));
+                // Alerta sobre a colisão para debugging (com menos frequência)
+                if (frameCount % 120 === 0) {
+                    console.log(`Colisão direta com obstáculo resolvida com pushEntityOut.`);
+                }
+            } else {
+                // Verificação mais precisa de colisão
+                const colliding = obstacle.collidesWith(this.base.position, size * 0.8);
                 
-                // Para a velocidade atual para evitar entrar mais fundo no obstáculo
-                this.base.velocity.mult(0.2);
-                
-                // Alerta sobre a colisão para debugging
-                console.log(`Colisão direta com obstáculo detectada! Aplicando força de escape.`);
+                if (colliding) {
+                    inCollision = true;
+                    
+                    // Calcula vetor de saída da colisão
+                    const obstacleCenter = createVector(
+                        obstacle.x + obstacle.w/2,
+                        obstacle.y + obstacle.h/2
+                    );
+                    
+                    const escapeVector = p5.Vector.sub(this.base.position, obstacleCenter);
+                    escapeVector.normalize();
+                    
+                    // Força para sair da colisão (reduzida de 4.0 para 3.0)
+                    escapeVector.mult(this.avoidForce * 3.0); 
+                    
+                    // Aplica a força e também move diretamente a posição para garantir saída imediata
+                    this.base.applyForce(escapeVector);
+                    this.base.position.add(p5.Vector.mult(escapeVector, 0.5));
+                    
+                    // Reduz a velocidade atual moderadamente (antes era 0.2)
+                    this.base.velocity.mult(0.6);
+                    
+                    // Garante velocidade mínima após redução
+                    if (this.base.velocity.mag() < 0.5) {
+                        escapeVector.normalize();
+                        escapeVector.mult(0.8);
+                        this.base.velocity.add(escapeVector);
+                    }
+                    
+                    // Alerta sobre a colisão para debugging (com menos frequência)
+                    if (frameCount % 120 === 0) {
+                        console.log(`Colisão direta com obstáculo detectada! Aplicando força de escape.`);
+                    }
+                }
             }
         }
         

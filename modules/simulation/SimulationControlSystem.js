@@ -312,6 +312,219 @@ class SimulationControlSystem {
     getSpeed() {
         return this.speed;
     }
+
+    /**
+     * Manipula o clique no botão de adicionar bactérias
+     */
+    handleButtonAddBacteria() {
+        try {
+            console.log("🖱️ Botão Adicionar Bactérias clicado");
+            
+            // Obter os valores dos controles
+            const count = parseInt(document.getElementById('add-bacteria-amount-slider')?.value || 10);
+            const femaleRatio = parseFloat(document.getElementById('add-bacteria-female-ratio-slider')?.value || 50);
+            
+            console.log(`📊 Valores obtidos: ${count} bactérias, ${femaleRatio}% fêmeas`);
+            
+            // Validação básica
+            if (isNaN(count) || isNaN(femaleRatio)) {
+                console.error("❌ Valores inválidos para adicionar bactérias");
+                return;
+            }
+            
+            // Verificar se a simulação existe
+            if (!this.simulation) {
+                console.error("❌ Simulação não disponível");
+                return;
+            }
+            
+            // Verificar se o EntityManager existe
+            if (!this.simulation.entityManager) {
+                console.error("❌ EntityManager não disponível");
+                return;
+            }
+            
+            // Verificar se o método existe
+            if (typeof this.simulation.entityManager.addMultipleBacteria !== 'function') {
+                console.error("❌ Método addMultipleBacteria não disponível");
+                
+                // Tentar solução alternativa
+                if (Array.isArray(this.simulation.entityManager.bacteria)) {
+                    console.log("⚠️ Usando método alternativo para adicionar bactérias");
+                    this.addBacteriasFallback(count, femaleRatio);
+                }
+                return;
+            }
+            
+            // Chamar o método
+            console.log(`🚀 Chamando entityManager.addMultipleBacteria(${count}, ${femaleRatio})`);
+            this.simulation.entityManager.addMultipleBacteria(Number(count), Number(femaleRatio));
+        } catch (error) {
+            console.error("❌ Erro ao adicionar bactérias:", error);
+        }
+    }
+    
+    /**
+     * Método alternativo para adicionar bactérias caso o método original não esteja disponível
+     * @param {number} count - Número de bactérias para adicionar
+     * @param {number} femaleRatio - Porcentagem de fêmeas (0-100)
+     */
+    addBacteriasFallback(count, femaleRatio) {
+        try {
+            console.log("🔄 Usando método fallback para adicionar bactérias");
+            const femaleCount = Math.round(count * (femaleRatio / 100));
+            
+            // Verificar se a classe Bacteria está disponível
+            if (typeof window.Bacteria !== 'function') {
+                console.error("❌ Classe Bacteria não está disponível");
+                return;
+            }
+            
+            // Adicionar bactérias
+            for (let i = 0; i < count; i++) {
+                const isFemale = i < femaleCount;
+                const x = random(this.simulation.width * 0.1, this.simulation.width * 0.9);
+                const y = random(this.simulation.height * 0.1, this.simulation.height * 0.9);
+                
+                try {
+                    const bacteria = new window.Bacteria({
+                        x: x,
+                        y: y,
+                        isFemale: isFemale,
+                        energy: this.simulation.entityManager.initialEnergy || 150,
+                        initialEnergy: this.simulation.entityManager.initialEnergy || 150,
+                        initialState: "exploring"
+                    });
+                    
+                    if (bacteria) {
+                        bacteria.simulation = this.simulation;
+                        this.simulation.entityManager.bacteria.push(bacteria);
+                        console.log(`✅ Bactéria ${i+1} adicionada com sucesso via fallback`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Erro ao criar bactéria ${i+1}:`, error);
+                }
+            }
+            
+            console.log(`✅ Total: ${this.simulation.entityManager.bacteria.length} bactérias`);
+        } catch (error) {
+            console.error("❌ Erro no método fallback:", error);
+        }
+    }
+
+    /**
+     * Configura os event listeners para os controles
+     * @param {Object} callbacks - Objeto com as funções de callback para cada controle
+     */
+    setupEventListeners(callbacks) {
+        try {
+            console.log("🔧 Configurando event listeners para os controles");
+            this.callbacks = callbacks || {};
+            
+            // Procura o botão pelo texto em vez de pelo ID
+            console.log("🔍 Procurando botão 'Adicionar Bactérias' pelo texto...");
+            
+            let addBacteriaButton = null;
+            const allButtons = document.querySelectorAll('button');
+            console.log(`🔍 Encontrados ${allButtons.length} botões no DOM`);
+            
+            allButtons.forEach((btn, index) => {
+                const text = btn.innerText || btn.textContent;
+                if (text && text.includes("Adicionar Bactérias")) {
+                    console.log(`✅ Botão encontrado: "${text}" (index: ${index})`);
+                    addBacteriaButton = btn;
+                }
+            });
+            
+            if (addBacteriaButton) {
+                console.log("✅ Botão Adicionar Bactérias encontrado, conectando...");
+                
+                // Remover listeners antigos para evitar duplicação
+                const newButton = addBacteriaButton.cloneNode(true);
+                addBacteriaButton.parentNode.replaceChild(newButton, addBacteriaButton);
+                
+                // Adicionar novo event listener
+                newButton.addEventListener('click', () => {
+                    console.log("🖱️ Botão Adicionar Bactérias clicado via listener direto");
+                    this.handleButtonAddBacteria();
+                });
+                
+                console.log("✅ Event listener configurado com sucesso");
+            } else {
+                console.error("❌ Botão 'Adicionar Bactérias' não encontrado pelo texto");
+                
+                // Tentar encontrar através de classes ou outros seletores
+                console.log("🔍 Tentando encontrar botão por seletores alternativos...");
+                
+                // Tenta encontrar no DOM qualquer botão dentro da div de controles
+                document.querySelectorAll('div div div button').forEach((btn, index) => {
+                    console.log(`Botão ${index}: "${btn.innerText || btn.textContent}"`);
+                });
+                
+                // Requer uma solução alternativa - precisamos criar nosso próprio botão
+                this.createEmergencyButton();
+            }
+            
+            // Os demais listeners podem continuar usando os callbacks
+            // Apenas para garantir que o onAddBacteria seja chamado
+            if (typeof this.callbacks.onAddBacteria === 'function') {
+                const originalCallback = this.callbacks.onAddBacteria;
+                this.callbacks.onAddBacteria = (count, femaleRatio) => {
+                    console.log("📣 Callback original onAddBacteria interceptado");
+                    this.handleButtonAddBacteria();
+                    originalCallback(count, femaleRatio);
+                };
+                console.log("✅ Callback onAddBacteria interceptado e configurado");
+            }
+        } catch (error) {
+            console.error("❌ Erro ao configurar event listeners:", error);
+            // Requer uma solução alternativa - criamos nosso próprio botão
+            this.createEmergencyButton();
+        }
+    }
+    
+    /**
+     * Cria um botão de emergência para adicionar bactérias caso o original não funcione
+     */
+    createEmergencyButton() {
+        try {
+            console.log("🚨 Criando botão de emergência para adicionar bactérias");
+            
+            // Verifica se a biblioteca p5.js está disponível
+            if (typeof createButton !== 'function') {
+                console.error("❌ Função createButton não disponível, não é possível criar botão de emergência");
+                return;
+            }
+            
+            // Cria o botão usando p5.js
+            const emergencyButton = createButton('⚠️ Adicionar Bactérias (Emergência)');
+            
+            // Posiciona o botão no centro da tela
+            emergencyButton.position(20, 100);
+            emergencyButton.size(250, 40);
+            
+            // Estiliza o botão
+            emergencyButton.style('background-color', '#ff5722');
+            emergencyButton.style('color', 'white');
+            emergencyButton.style('border', 'none');
+            emergencyButton.style('border-radius', '4px');
+            emergencyButton.style('cursor', 'pointer');
+            emergencyButton.style('font-weight', 'bold');
+            emergencyButton.style('font-size', '14px');
+            emergencyButton.style('z-index', '9999');
+            emergencyButton.style('box-shadow', '0 4px 8px rgba(0,0,0,0.3)');
+            
+            // Adiciona evento de clique
+            emergencyButton.mousePressed(() => {
+                console.log("🖱️ Botão de emergência clicado");
+                this.handleButtonAddBacteria();
+            });
+            
+            console.log("✅ Botão de emergência criado com sucesso");
+        } catch (error) {
+            console.error("❌ Erro ao criar botão de emergência:", error);
+        }
+    }
 }
 
 // Torna a classe disponível globalmente

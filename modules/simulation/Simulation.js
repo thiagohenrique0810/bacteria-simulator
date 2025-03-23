@@ -13,6 +13,13 @@ class Simulation {
         this.time = 0;
         this.maxObstacles = 5; // Valor inicial de obstáculos
         
+        // Propriedades para interação do mouse
+        this.selectedBacteria = null;
+        this.isDragging = false;
+        this.isPlacingObstacle = false;
+        this.obstacleStart = null;
+        this.effects = []; // Para efeitos visuais
+        
         // Sistemas
         this.initSystems();
         
@@ -143,7 +150,7 @@ class Simulation {
         this.interactionSystem.checkInteractions();
         
         // Atualiza os efeitos visuais
-        this.entityManager.updateEffects();
+        this.updateEffects();
         
         // Atualiza as estatísticas
         this.statsManager.updateStats();
@@ -233,6 +240,36 @@ class Simulation {
 
         // Inicializa estatísticas
         this.statsManager.initStats();
+    }
+
+    /**
+     * Atualiza os efeitos visuais
+     */
+    updateEffects() {
+        // Atualiza e remove efeitos expirados
+        if (this.effects) {
+            for (let i = this.effects.length - 1; i >= 0; i--) {
+                const effect = this.effects[i];
+                const isAlive = effect.update();
+                
+                if (!isAlive) {
+                    this.effects.splice(i, 1);
+                }
+            }
+        }
+    }
+
+    /**
+     * Desenha os efeitos visuais
+     */
+    drawEffects() {
+        if (this.effects) {
+            for (const effect of this.effects) {
+                if (typeof effect.draw === 'function') {
+                    effect.draw();
+                }
+            }
+        }
     }
 }
 

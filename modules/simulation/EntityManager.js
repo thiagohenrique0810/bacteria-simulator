@@ -71,16 +71,68 @@ class EntityManager {
                 isFemale: random() > 0.5
             });
             
-            // Adiciona velocidade inicial aleatória
-            if (bacteria.movement && bacteria.movement.movement) {
-                const initialVelocity = p5.Vector.random2D();
-                initialVelocity.mult(2); // Velocidade moderada
-                bacteria.movement.movement.velocity.set(initialVelocity);
+            // Verifica sistema de movimento
+            if (!bacteria.movement) {
+                console.error("Movimento não inicializado para a bactéria", i);
+                bacteria.movement = new BacteriaMovement(bacteria);
+            }
+            
+            // Garantir que o sistema de movimento esteja completamente inicializado
+            if (!bacteria.movement.movement) {
+                console.warn("Sistema de movimento aninhado não existe para a bactéria", i);
+                // Tenta recriar o sistema de movimento
+                bacteria.movement = new BacteriaMovement(bacteria);
+            }
+            
+            // Inicializa a velocidade se estiver zerada ou não existir
+            if (!bacteria.movement.movement || 
+                !bacteria.movement.movement.velocity || 
+                typeof bacteria.movement.movement.velocity.mag !== 'function' || 
+                bacteria.movement.movement.velocity.mag() === 0) {
                 
-                // Força um movimento inicial
-                const initialForce = p5.Vector.random2D();
-                initialForce.mult(1);
-                bacteria.movement.applyForce(initialForce);
+                console.log(`Inicializando velocidade para bactéria ${i}`);
+                
+                // Cria uma velocidade inicial mais forte
+                const initialVelocity = p5.Vector.random2D();
+                initialVelocity.mult(3); // Velocidade mais alta para garantir o movimento
+                
+                try {
+                    if (bacteria.movement.movement) {
+                        bacteria.movement.movement.velocity = initialVelocity;
+                        
+                        // Também define a posição do movimento para corresponder à bactéria
+                        bacteria.movement.movement.position = bacteria.pos.copy();
+                        
+                        // Garantir que maxSpeed não esteja zerado
+                        if (bacteria.movement.movement.maxSpeed <= 0) {
+                            bacteria.movement.movement.maxSpeed = 4;
+                        }
+                        
+                        // Aplica uma força inicial também
+                        const initialForce = p5.Vector.random2D();
+                        initialForce.mult(2);
+                        bacteria.movement.movement.applyForce(initialForce);
+                        
+                        console.log(`Velocidade inicial configurada: ${initialVelocity.mag().toFixed(2)}`);
+                    } else {
+                        // Em caso de falha na estrutura aninhada, tenta criar um movimento direto
+                        console.warn("Criando um sistema de movimento manual para a bactéria", i);
+                        bacteria.movement = {
+                            movement: new Movement(bacteria.pos.copy(), bacteria.size),
+                            moveRandom: function(dt, speedModifier) {
+                                const dir = p5.Vector.random2D();
+                                dir.mult(speedModifier || 1);
+                                this.movement.applyForce(dir);
+                                this.movement.update(0, [], bacteria.size, false, dt);
+                            }
+                        };
+                        
+                        // Inicializa a velocidade do novo movimento
+                        bacteria.movement.movement.velocity = initialVelocity;
+                    }
+                } catch (error) {
+                    console.error("Erro ao inicializar movimento:", error);
+                }
             }
             
             // Adiciona à lista de bactérias
@@ -191,24 +243,62 @@ class EntityManager {
                         bacteria.movement = new BacteriaMovement(bacteria);
                     }
                     
-                    // Inicializa a velocidade se estiver zerada
+                    // Garantir que o sistema de movimento esteja completamente inicializado
+                    if (!bacteria.movement.movement) {
+                        console.warn("Sistema de movimento aninhado não existe para a bactéria", i);
+                        // Tenta recriar o sistema de movimento
+                        bacteria.movement = new BacteriaMovement(bacteria);
+                    }
+                    
+                    // Inicializa a velocidade se estiver zerada ou não existir
                     if (!bacteria.movement.movement || 
                         !bacteria.movement.movement.velocity || 
                         typeof bacteria.movement.movement.velocity.mag !== 'function' || 
                         bacteria.movement.movement.velocity.mag() === 0) {
                         
-                        // Cria uma velocidade inicial
+                        console.log(`Inicializando velocidade para bactéria ${i}`);
+                        
+                        // Cria uma velocidade inicial mais forte
                         const initialVelocity = p5.Vector.random2D();
-                        initialVelocity.mult(2); // Velocidade moderada
+                        initialVelocity.mult(3); // Velocidade mais alta para garantir o movimento
                         
-                        if (bacteria.movement.movement) {
-                            bacteria.movement.movement.velocity = initialVelocity;
-                        } else {
-                            console.warn("Sistema de movimento incompleto na bactéria", i);
+                        try {
+                            if (bacteria.movement.movement) {
+                                bacteria.movement.movement.velocity = initialVelocity;
+                                
+                                // Também define a posição do movimento para corresponder à bactéria
+                                bacteria.movement.movement.position = bacteria.pos.copy();
+                                
+                                // Garantir que maxSpeed não esteja zerado
+                                if (bacteria.movement.movement.maxSpeed <= 0) {
+                                    bacteria.movement.movement.maxSpeed = 4;
+                                }
+                                
+                                // Aplica uma força inicial também
+                                const initialForce = p5.Vector.random2D();
+                                initialForce.mult(2);
+                                bacteria.movement.movement.applyForce(initialForce);
+                                
+                                console.log(`Velocidade inicial configurada: ${initialVelocity.mag().toFixed(2)}`);
+                            } else {
+                                // Em caso de falha na estrutura aninhada, tenta criar um movimento direto
+                                console.warn("Criando um sistema de movimento manual para a bactéria", i);
+                                bacteria.movement = {
+                                    movement: new Movement(bacteria.pos.copy(), bacteria.size),
+                                    moveRandom: function(dt, speedModifier) {
+                                        const dir = p5.Vector.random2D();
+                                        dir.mult(speedModifier || 1);
+                                        this.movement.applyForce(dir);
+                                        this.movement.update(0, [], bacteria.size, false, dt);
+                                    }
+                                };
+                                
+                                // Inicializa a velocidade do novo movimento
+                                bacteria.movement.movement.velocity = initialVelocity;
+                            }
+                        } catch (error) {
+                            console.error("Erro ao inicializar movimento:", error);
                         }
-                        
-                        // Aplica uma força inicial também
-                        bacteria.movement.applyForce(p5.Vector.random2D());
                     }
                     
                     // Verifica sistema de estados

@@ -327,6 +327,9 @@ class SimulationVisualization {
         this.drawFood();
         this.drawBacteria();
 
+        // Desenha efeitos visuais
+        this.simulation.drawEffects();
+
         // Desenha visualização do particionamento espacial
         if (this.showGrid && this.simulation.spatialGrid) {
             this.drawSpatialGrid();

@@ -8,6 +8,10 @@ class BacteriaEnvironment {
      */
     constructor(bacteria) {
         this.bacteria = bacteria;
+        
+        // Adiciona controle de tempo para detecção de parceiros
+        this.lastMateDetectionTime = 0;
+        this.mateDetectionCooldown = 120; // 2 segundos em 60fps
     }
 
     /**
@@ -23,9 +27,10 @@ class BacteriaEnvironment {
         const conditions = {
             foodNearby: false,
             mateNearby: false,
+            mateReady: false, // Nova flag para indicar se a reprodução está realmente possível
+            mateTarget: null,
             predatorNearby: false,
             foodTarget: null,
-            mateTarget: null,
             predatorTarget: null,
             obstacleNearby: false,
             obstacles: []
@@ -97,42 +102,67 @@ class BacteriaEnvironment {
             }
         }
 
-        // Verifica bactérias compatíveis para reprodução
-        for (const e of entities) {
-            if (!e || !(e instanceof Bacteria) || e === this.bacteria) continue;
+        // Verifica bactérias compatíveis para reprodução (com cooldown)
+        const currentTime = frameCount;
+        const mateDetectionReady = currentTime - this.lastMateDetectionTime >= this.mateDetectionCooldown;
+        
+        // Só busca parceiros se estiver fora do período de cooldown
+        if (mateDetectionReady) {
+            let foundMate = false;
             
-            // Verifica se é um parceiro em potencial (sexo oposto)
-            if (e.isFemale !== this.bacteria.isFemale) {
-                const d = dist(this.bacteria.pos.x, this.bacteria.pos.y, e.pos.x, e.pos.y);
-                if (d < this.bacteria.perceptionRadius) {
-                    // Obtém a energia do parceiro potencial e da própria bactéria
-                    let partnerEnergy = 0;
-                    let bacteriaEnergy = 0;
-                    
-                    // Verifica energia do parceiro
-                    if (e.stateManager && e.stateManager.currentEnergy !== undefined) {
-                        partnerEnergy = e.stateManager.currentEnergy;
-                    } else if (e.states && typeof e.states.getEnergy === 'function') {
-                        partnerEnergy = e.states.getEnergy();
-                    }
-                    
-                    // Verifica energia da própria bactéria
-                    if (this.bacteria.stateManager && this.bacteria.stateManager.currentEnergy !== undefined) {
-                        bacteriaEnergy = this.bacteria.stateManager.currentEnergy;
-                    } else if (this.bacteria.states && typeof this.bacteria.states.getEnergy === 'function') {
-                        bacteriaEnergy = this.bacteria.states.getEnergy();
-                    }
-                    
-                    // Verifica se ambos têm energia suficiente para reprodução
-                    if (partnerEnergy > 60 && bacteriaEnergy > 60) {
-                        conditions.mateNearby = true;
+            for (const e of entities) {
+                if (!e || !(e instanceof Bacteria) || e === this.bacteria) continue;
+                
+                // Verifica se é um parceiro em potencial (sexo oposto)
+                if (e.isFemale !== this.bacteria.isFemale) {
+                    const d = dist(this.bacteria.pos.x, this.bacteria.pos.y, e.pos.x, e.pos.y);
+                    if (d < this.bacteria.perceptionRadius) {
+                        // Obtém a energia do parceiro potencial e da própria bactéria
+                        let partnerEnergy = 0;
+                        let bacteriaEnergy = 0;
                         
-                        // Se não tiver alvo de parceiro ou se este parceiro estiver mais perto
-                        if (!conditions.mateTarget || d < dist(this.bacteria.pos.x, this.bacteria.pos.y, conditions.mateTarget.pos.x, conditions.mateTarget.pos.y)) {
-                            conditions.mateTarget = e;
+                        // Verifica energia do parceiro
+                        if (e.stateManager && e.stateManager.currentEnergy !== undefined) {
+                            partnerEnergy = e.stateManager.currentEnergy;
+                        } else if (e.states && typeof e.states.getEnergy === 'function') {
+                            partnerEnergy = e.states.getEnergy();
+                        }
+                        
+                        // Verifica energia da própria bactéria
+                        if (this.bacteria.stateManager && this.bacteria.stateManager.currentEnergy !== undefined) {
+                            bacteriaEnergy = this.bacteria.stateManager.currentEnergy;
+                        } else if (this.bacteria.states && typeof this.bacteria.states.getEnergy === 'function') {
+                            bacteriaEnergy = this.bacteria.states.getEnergy();
+                        }
+                        
+                        // Requisitos mais rigorosos para reprodução:
+                        // 1. Ambos devem ter energia suficiente (aumentado para 80)
+                        // 2. Parceiros devem estar mais próximos (75% do raio de percepção)
+                        // 3. Verificação adicional se não está em período reprodutivo de cooldown
+                        if (partnerEnergy > 80 && bacteriaEnergy > 80 && d < this.bacteria.perceptionRadius * 0.75) {
+                            conditions.mateNearby = true;
+                            foundMate = true;
+                            
+                            // Verifica se o parceiro também está em estado receptivo
+                            let partnerReady = false;
+                            if (e.stateManager && e.stateManager.currentState) {
+                                partnerReady = e.stateManager.currentState !== 'reproducing';
+                            }
+                            
+                            conditions.mateReady = partnerReady;
+                            
+                            // Se não tiver alvo de parceiro ou se este parceiro estiver mais perto
+                            if (!conditions.mateTarget || d < dist(this.bacteria.pos.x, this.bacteria.pos.y, conditions.mateTarget.pos.x, conditions.mateTarget.pos.y)) {
+                                conditions.mateTarget = e;
+                            }
                         }
                     }
                 }
+            }
+            
+            // Se encontrou um parceiro, marca o tempo da última detecção
+            if (foundMate) {
+                this.lastMateDetectionTime = currentTime;
             }
         }
 

@@ -20,6 +20,20 @@ class BacteriaStateManager {
         // Timer para forçar mudança de estado
         this.stateTimer = 0;
         this.forceExploreInterval = 180; // A cada 3 segundos, força exploração
+        
+        // Adiciona tempo de espera para evitar loops de estados
+        this.stateChangeCooldown = 0;
+        this.maxStateChangeCooldown = 30; // Meio segundo em 60fps
+        
+        // Cooldown específico para reprodução para evitar loop
+        this.reproductionCooldown = 0;
+        this.maxReproductionCooldown = 300; // 5 segundos em 60fps
+        
+        // Armazena o último estado para controle
+        this.lastState = '';
+        
+        // Contador de alternâncias entre estados
+        this.stateAlternations = {};
     }
     
     /**
@@ -35,12 +49,44 @@ class BacteriaStateManager {
      * @param {string} state - Novo estado para a bactéria
      */
     setCurrentState(state) {
+        // Verifica se está no período de cooldown e impede mudanças frequentes de estado
+        if (this.stateChangeCooldown > 0 && this.currentState !== state) {
+            return;
+        }
+        
+        // Verifica cooldown específico de reprodução
+        if (state === 'reproducing' && this.reproductionCooldown > 0) {
+            return;
+        }
+        
+        // Controle de alternância de estados
         if (this.currentState !== state) {
+            // Registra o par de alternância para detectar loops
+            const statePair = `${this.currentState}->${state}`;
+            this.stateAlternations[statePair] = (this.stateAlternations[statePair] || 0) + 1;
+            
+            // Se houver muitas alternâncias rápidas entre dois estados, força um terceiro estado
+            if (this.stateAlternations[statePair] > 3 && 
+                frameCount - this.lastStateChangeTime < 90) {
+                console.log(`Detectado loop entre ${this.currentState} e ${state}. Forçando estado 'resting'`);
+                state = 'resting';
+                this.stateAlternations = {}; // Reseta contadores
+            }
+            
+            this.lastState = this.currentState;
             this.lastStateChangeTime = frameCount;
             this.currentState = state;
             
             // Log da mudança de estado
             console.log(`Bactéria ${this.bacteria.id} mudou para estado: ${state}`);
+            
+            // Aplica cooldown para prevenir mudanças rápidas de estado
+            this.stateChangeCooldown = this.maxStateChangeCooldown;
+            
+            // Se estamos entrando no estado de reprodução, aplica um cooldown específico
+            if (state === 'reproducing') {
+                this.reproductionCooldown = this.maxReproductionCooldown;
+            }
             
             // Reseta o contador de descanso se mudar para outro estado
             if (state !== 'resting') {
@@ -92,6 +138,20 @@ class BacteriaStateManager {
             console.log(`StateManager update: energy=${this.currentEnergy.toFixed(1)}, state=${this.currentState}, timer=${this.stateTimer}`);
         }
         
+        // Decrementa cooldowns
+        if (this.stateChangeCooldown > 0) {
+            this.stateChangeCooldown--;
+        }
+        
+        if (this.reproductionCooldown > 0) {
+            this.reproductionCooldown--;
+            
+            if (this.reproductionCooldown === 0 && this.currentState === 'reproducing') {
+                // Força saída do estado de reprodução quando o cooldown terminar
+                this.setCurrentState('exploring');
+            }
+        }
+        
         // Incrementa o timer geral
         this.stateTimer++;
         
@@ -115,9 +175,9 @@ class BacteriaStateManager {
         }
         
         // Determina o estado baseado nas condições, se não estiver no tempo de exploração forçada
-        if (this.stateTimer < this.forceExploreInterval - 30) {
+        if (this.stateTimer < this.forceExploreInterval - 30 && this.stateChangeCooldown === 0) {
             if (conditions) {
-                // Sempre prioriza fuga de predadores
+                // Sempre prioriza fuga de predadores, ignorando qualquer cooldown
                 if (conditions.predatorNearby) {
                     this.setCurrentState('fleeing');
                 } 
@@ -125,8 +185,8 @@ class BacteriaStateManager {
                 else if (conditions.foodNearby && this.currentEnergy < 70) {
                     this.setCurrentState('seekingFood');
                 } 
-                // Prioriza reprodução se tiver bastante energia
-                else if (conditions.mateNearby && this.currentEnergy > 80) {
+                // Prioriza reprodução se tiver bastante energia e não estiver em cooldown
+                else if (conditions.mateNearby && conditions.mateReady && this.currentEnergy > 80 && this.reproductionCooldown === 0) {
                     this.setCurrentState('reproducing');
                 } 
                 // Só descansa se a energia estiver muito baixa
@@ -138,13 +198,18 @@ class BacteriaStateManager {
                     this.setCurrentState('exploring');
                 }
                 
-                // Se há um estado forçado do Q-Learning, use-o
-                if (conditions.forcedState) {
+                // Se há um estado forçado do Q-Learning, use-o apenas se não estiver em cooldown
+                if (conditions.forcedState && this.stateChangeCooldown === 0) {
                     const previousState = this.currentState;
                     
                     switch (conditions.forcedState) {
                         case 'seekFood': this.setCurrentState('seekingFood'); break;
-                        case 'seekMate': this.setCurrentState('reproducing'); break;
+                        case 'seekMate': 
+                            // Verifica cooldown de reprodução e se o parceiro está pronto
+                            if (this.reproductionCooldown === 0 && conditions.mateReady) {
+                                this.setCurrentState('reproducing'); 
+                            }
+                            break;
                         case 'rest': 
                             // Limita o estado de descanso por q-learning também
                             if (this.restingTime < this.maxRestingTime) {
@@ -162,6 +227,9 @@ class BacteriaStateManager {
         // Consume energia baseado no estado
         if (this.currentState === 'resting') {
             this.addEnergy(0.2); // Aumentado para recuperar energia mais rápido
+        } else if (this.currentState === 'reproducing') {
+            // Consume mais energia ao se reproduzir
+            this.removeEnergy(0.15);
         } else {
             this.removeEnergy(0.05);
         }

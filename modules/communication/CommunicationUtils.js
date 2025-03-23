@@ -46,6 +46,12 @@ class CommunicationUtils {
      * @returns {number} - Distância entre as bactérias
      */
     calculateDistance(b1, b2) {
+        // Verifica se as bactérias e suas posições são válidas
+        if (!b1 || !b2 || !b1.pos || !b2.pos || 
+            isNaN(b1.pos.x) || isNaN(b1.pos.y) || 
+            isNaN(b2.pos.x) || isNaN(b2.pos.y)) {
+            return Infinity; // Retorna distância infinita se algo for inválido
+        }
         return dist(b1.pos.x, b1.pos.y, b2.pos.x, b2.pos.y);
     }
     
@@ -57,6 +63,10 @@ class CommunicationUtils {
      * @returns {boolean} - Verdadeiro se estiver no raio
      */
     isInCommunicationRange(b1, b2, range) {
+        // Verifica se todos os parâmetros são válidos
+        if (!b1 || !b2 || !range || range <= 0) {
+            return false;
+        }
         return this.calculateDistance(b1, b2) <= range;
     }
     
@@ -67,23 +77,41 @@ class CommunicationUtils {
      * @returns {Bacteria[]} - Lista de bactérias próximas
      */
     findNearbyBacteria(bacteria, range) {
-        const allBacteria = this.communicationSystem.simulation.bacteria;
-        const nearby = [];
-        
-        // Usa o grid espacial se disponível para otimização
-        if (this.communicationSystem.simulation.spatialGrid) {
-            const nearbyEntities = this.communicationSystem.simulation.spatialGrid.queryRadius(bacteria.pos, range);
-            return nearbyEntities.filter(e => e instanceof Bacteria && e !== bacteria);
+        // Verifica se os parâmetros são válidos
+        if (!bacteria || !bacteria.pos || !range || range <= 0) {
+            return [];
         }
         
-        // Método tradicional se não houver grid espacial
-        for (const other of allBacteria) {
-            if (other !== bacteria && this.isInCommunicationRange(bacteria, other, range)) {
-                nearby.push(other);
+        try {
+            const allBacteria = this.communicationSystem?.simulation?.bacteria || [];
+            const nearby = [];
+            
+            // Usa o grid espacial se disponível para otimização
+            if (this.communicationSystem?.simulation?.spatialGrid) {
+                try {
+                    const nearbyEntities = this.communicationSystem.simulation.spatialGrid.queryRadius(bacteria.pos, range);
+                    if (!nearbyEntities || !Array.isArray(nearbyEntities)) {
+                        return [];
+                    }
+                    return nearbyEntities.filter(e => e && e instanceof Bacteria && e !== bacteria);
+                } catch (error) {
+                    console.warn('Erro ao consultar o grid espacial:', error);
+                    // Continua para o método tradicional em caso de erro
+                }
             }
+            
+            // Método tradicional se não houver grid espacial
+            for (const other of allBacteria) {
+                if (other && other !== bacteria && other.pos && this.isInCommunicationRange(bacteria, other, range)) {
+                    nearby.push(other);
+                }
+            }
+            
+            return nearby;
+        } catch (error) {
+            console.error('Erro ao buscar bactérias próximas:', error);
+            return [];
         }
-        
-        return nearby;
     }
     
     /**
@@ -94,8 +122,18 @@ class CommunicationUtils {
      * @returns {number} - Chance ajustada
      */
     getPersonalityBasedChance(bacteria, trait, baseChance) {
-        const traitValue = bacteria.dna?.genes?.[trait] || 1;
-        return baseChance * traitValue;
+        // Verifica se os parâmetros são válidos
+        if (!bacteria || !trait || baseChance === undefined || baseChance === null) {
+            return baseChance || 0.01; // Retorna a chance base ou um valor mínimo
+        }
+        
+        try {
+            const traitValue = bacteria.dna?.genes?.[trait] || 1;
+            return baseChance * traitValue;
+        } catch (error) {
+            console.warn(`Erro ao calcular chance baseada na personalidade (${trait}):`, error);
+            return baseChance || 0.01;
+        }
     }
 }
 

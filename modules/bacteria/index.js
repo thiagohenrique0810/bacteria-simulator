@@ -86,19 +86,83 @@ class Bacteria extends BacteriaBase {
     }
     
     /**
+     * Verifica e corrige valores NaN nas propriedades críticas da bactéria
+     * @param {string} origem - Identificação da origem da validação para logs
+     * @returns {boolean} - true se alguma correção foi feita
+     */
+    validarPropriedades(origem = "geral") {
+        let foiCorrigido = false;
+        
+        // Verifica posição
+        if (!this.pos) {
+            console.error(`Bactéria ${this.id} sem posição! Criando posição padrão...`);
+            this.pos = createVector(random(width * 0.1, width * 0.9), random(height * 0.1, height * 0.9));
+            foiCorrigido = true;
+        } else if (isNaN(this.pos.x) || isNaN(this.pos.y)) {
+            console.error(`Detectada posição inválida NaN para bactéria ${this.id} (origem: ${origem})`);
+            this.pos.x = !isNaN(this.pos.x) ? this.pos.x : random(width * 0.1, width * 0.9);
+            this.pos.y = !isNaN(this.pos.y) ? this.pos.y : random(height * 0.1, height * 0.9);
+            foiCorrigido = true;
+        }
+        
+        // Verifica movimento
+        if (this.movement) {
+            // Verifica movimento aninhado
+            if (this.movement.movement) {
+                // Verifica posição do movimento
+                if (this.movement.movement.position) {
+                    if (isNaN(this.movement.movement.position.x) || isNaN(this.movement.movement.position.y)) {
+                        console.error(`Detectada posição de movimento inválida para bactéria ${this.id}`);
+                        // Corrige com a posição da bactéria se válida, ou com valores aleatórios
+                        this.movement.movement.position.x = !isNaN(this.pos.x) ? this.pos.x : random(width * 0.1, width * 0.9);
+                        this.movement.movement.position.y = !isNaN(this.pos.y) ? this.pos.y : random(height * 0.1, height * 0.9);
+                        foiCorrigido = true;
+                    }
+                }
+                
+                // Verifica velocidade do movimento
+                if (this.movement.movement.velocity) {
+                    if (isNaN(this.movement.movement.velocity.x) || isNaN(this.movement.movement.velocity.y)) {
+                        console.error(`Detectada velocidade de movimento inválida para bactéria ${this.id}`);
+                        this.movement.movement.velocity.x = 0;
+                        this.movement.movement.velocity.y = 0;
+                        // Adiciona velocidade aleatória para garantir movimento
+                        const randomVel = p5.Vector.random2D().mult(1.0);
+                        this.movement.movement.velocity.add(randomVel);
+                        foiCorrigido = true;
+                    }
+                }
+            }
+        }
+        
+        return foiCorrigido;
+    }
+    
+    /**
      * Atualiza a bactéria
      */
     update() {
-        // Incrementa a idade
-        this.age++;
-        
-        // Depuração a cada 60 frames (aproximadamente 1 segundo a 60 FPS)
-        if (this.age % 60 === 0) {
-            console.log(`Bactéria ${this.id}: pos=(${this.pos.x.toFixed(2)},${this.pos.y.toFixed(2)}), idade=${this.age}, energia=${this.stateManager ? this.stateManager.currentEnergy.toFixed(1) : 'N/A'}`);
-        }
-        
         try {
-            // Analisa o ambiente atual - CRÍTICO para IA
+            // Validação de estado no início do update
+            this.validarPropriedades("início-update");
+            
+            // Incrementa a idade
+            this.age++;
+            
+            // Decrementa o cooldown
+            this.cooldown = Math.max(0, this.cooldown - 1);
+            
+            // Se está morta, não atualiza
+            if (this.isDead()) {
+                return;
+            }
+            
+            // Registra a posição a cada 60 frames para depuração
+            if (this.age % 60 === 0) {
+                console.log(`Bactéria ${this.id}: pos=(${this.pos.x.toFixed(2)},${this.pos.y.toFixed(2)}), idade=${this.age}, energia=${this.stateManager ? this.stateManager.currentEnergy.toFixed(1) : 'N/A'}`);
+            }
+            
+            // Atualiza o ambiente da bactéria
             const environmentConditions = this.environment.analyzeEnvironment();
             
             // Usa o sistema de aprendizado para decidir a próxima ação
@@ -193,8 +257,80 @@ class Bacteria extends BacteriaBase {
                 
                 // CRÍTICO: Sincroniza a posição da bactéria com a posição calculada pelo sistema de movimento
                 if (this.movement.movement && this.movement.movement.position) {
+                    // Guarda a posição anterior para verificação de movimento
+                    const oldX = this.pos.x;
+                    const oldY = this.pos.y;
+                    
+                    // Verifica se a posição vinda do movimento tem NaN e corrige
+                    if (isNaN(this.movement.movement.position.x) || isNaN(this.movement.movement.position.y)) {
+                        console.error(`Detectada posição inválida NaN para bactéria ${this.id}`);
+                        
+                        // Restaura para posição anterior se ela era válida
+                        if (!isNaN(oldX) && !isNaN(oldY)) {
+                            this.movement.movement.position.x = oldX;
+                            this.movement.movement.position.y = oldY;
+                        } else {
+                            // Se a posição anterior também era inválida, redefine para uma posição aleatória válida
+                            const safeX = random(width * 0.1, width * 0.9);
+                            const safeY = random(height * 0.1, height * 0.9);
+                            
+                            this.movement.movement.position.x = safeX;
+                            this.movement.movement.position.y = safeY;
+                            console.log(`Bactéria ${this.id} reposicionada para (${safeX.toFixed(2)},${safeY.toFixed(2)})`);
+                        }
+                    }
+                    
+                    // Atualiza a posição
                     this.pos.x = this.movement.movement.position.x;
                     this.pos.y = this.movement.movement.position.y;
+                    
+                    // Verificação final para garantir que a posição não é NaN
+                    if (isNaN(this.pos.x) || isNaN(this.pos.y)) {
+                        console.error(`Posição ainda é NaN após correção para bactéria ${this.id}`);
+                        this.pos.x = random(width * 0.1, width * 0.9);
+                        this.pos.y = random(height * 0.1, height * 0.9);
+                        
+                        // Também corrige a posição no sistema de movimento
+                        this.movement.movement.position.x = this.pos.x;
+                        this.movement.movement.position.y = this.pos.y;
+                        
+                        console.log(`Posição corrigida para (${this.pos.x.toFixed(2)},${this.pos.y.toFixed(2)})`);
+                    }
+                    
+                    // Verifica se a posição realmente mudou
+                    const deltaX = this.pos.x - oldX;
+                    const deltaY = this.pos.y - oldY;
+                    const distanceMoved = !isNaN(deltaX) && !isNaN(deltaY) ? Math.sqrt(deltaX * deltaX + deltaY * deltaY) : 0;
+                    
+                    // Registra para depuração a cada 60 frames
+                    if (this.age % 60 === 0) {
+                        console.log(`Bactéria ${this.id} movimento: distância=${distanceMoved.toFixed(4)}, velMag=${this.movement.movement.velocity.mag().toFixed(4)}`);
+                    }
+                    
+                    // Se a bactéria não se moveu por muito tempo e deveria estar se movendo, aplica um impulso
+                    if (distanceMoved < 0.01 && stateInfo.shouldMove && this.movement.movement.velocity.mag() < 0.1) {
+                        // Cria um impulso aleatório mais forte
+                        const randomImpulse = p5.Vector.random2D();
+                        randomImpulse.mult(2.0); // Força mais forte para superar possível inércia
+                        
+                        // Aplica o impulso ao movimento
+                        if (this.movement.movement && typeof this.movement.movement.applyForce === 'function') {
+                            this.movement.movement.applyForce(randomImpulse);
+                            console.log(`Aplicando impulso para bactéria ${this.id} que está parada`);
+                        }
+                    }
+                } else if (this.movement && this.movement.position) {
+                    // Alternativa se a estrutura aninhada não existir
+                    // Verifica se a posição tem NaN e corrige
+                    if (isNaN(this.movement.position.x) || isNaN(this.movement.position.y)) {
+                        this.movement.position.x = random(width * 0.1, width * 0.9);
+                        this.movement.position.y = random(height * 0.1, height * 0.9);
+                    }
+                    
+                    this.pos.x = this.movement.position.x;
+                    this.pos.y = this.movement.position.y;
+                } else {
+                    console.warn(`Sistema de movimento incompleto para a bactéria ${this.id}`);
                 }
             } else {
                 console.warn(`Sistema de movimento não inicializado para a bactéria ${this.id}`);
@@ -213,8 +349,13 @@ class Bacteria extends BacteriaBase {
                     environmentConditions
                 );
             }
+            
+            // Validação final para garantir integridade das propriedades
+            this.validarPropriedades("final-update");
         } catch (error) {
-            console.error(`Erro durante atualização da bactéria ${this.id}:`, error);
+            console.error(`Erro ao atualizar bactéria ${this.id}:`, error);
+            // Em caso de erro grave, tenta restaurar a bactéria para um estado funcional
+            this.validarPropriedades("erro-update");
         }
     }
     

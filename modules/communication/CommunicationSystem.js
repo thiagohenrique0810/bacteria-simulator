@@ -33,52 +33,103 @@ class CommunicationSystem {
      * Verifica bactérias próximas umas das outras para possível comunicação
      */
     checkBacteriaCommunication() {
-        const bacteria = this.simulation.bacteria;
-        
-        // Usa o grid espacial se disponível
-        if (this.simulation.spatialGrid) {
-            for (let i = 0; i < bacteria.length; i++) {
-                const b1 = bacteria[i];
-                
-                // Chance de iniciar comunicação baseada no gene de sociabilidade
-                const communicationChance = this.utils.getPersonalityBasedChance(
-                    b1, 'sociability', this.randomMessageChance
-                );
-                
-                // Tenta iniciar comunicação aleatória
-                if (random() < communicationChance) {
-                    // Busca bactérias próximas usando o grid espacial
-                    const nearbyBacteria = this.utils.findNearbyBacteria(b1, this.communicationRange);
+        try {
+            // Verifica se a simulação e as bactérias estão disponíveis
+            if (!this.simulation || !this.simulation.bacteria || !Array.isArray(this.simulation.bacteria)) {
+                console.warn("CommunicationSystem: Simulação ou bactérias indisponíveis");
+                return;
+            }
+            
+            const bacteria = this.simulation.bacteria;
+            
+            // Se não há bactérias, não continua
+            if (bacteria.length === 0) {
+                return;
+            }
+            
+            // Usa o grid espacial se disponível
+            if (this.simulation.spatialGrid) {
+                for (let i = 0; i < bacteria.length; i++) {
+                    const b1 = bacteria[i];
                     
-                    if (nearbyBacteria.length > 0) {
-                        // Seleciona uma bactéria aleatória próxima
-                        const b2 = random(nearbyBacteria);
-                        this.messageManager.createBacteriaMessage(b1, b2);
+                    // Verifica se a bactéria é válida
+                    if (!b1 || !b1.pos) {
+                        continue;
                     }
-                }
-            }
-        } else {
-            // Fallback se o grid espacial não estiver disponível (método menos eficiente)
-            for (let i = 0; i < bacteria.length; i++) {
-                const b1 = bacteria[i];
-                
-                // Menor chance de comunicação para evitar sobrecarga no método não otimizado
-                const communicationChance = this.utils.getPersonalityBasedChance(
-                    b1, 'sociability', this.randomMessageChance * 0.5
-                );
-                
-                if (random() < communicationChance) {
-                    for (let j = 0; j < bacteria.length; j++) {
-                        if (i === j) continue;
+                    
+                    try {
+                        // Chance de iniciar comunicação baseada no gene de sociabilidade
+                        const communicationChance = this.utils.getPersonalityBasedChance(
+                            b1, 'sociability', this.randomMessageChance
+                        );
                         
-                        const b2 = bacteria[j];
-                        if (this.utils.isInCommunicationRange(b1, b2, this.communicationRange)) {
-                            this.messageManager.createBacteriaMessage(b1, b2);
-                            break; // Apenas uma comunicação por vez
+                        // Tenta iniciar comunicação aleatória
+                        if (random() < communicationChance) {
+                            // Busca bactérias próximas usando o grid espacial
+                            const nearbyBacteria = this.utils.findNearbyBacteria(b1, this.communicationRange);
+                            
+                            if (nearbyBacteria && nearbyBacteria.length > 0) {
+                                // Seleciona uma bactéria aleatória próxima
+                                const b2 = random(nearbyBacteria);
+                                
+                                // Verifica se a bactéria selecionada é válida
+                                if (b2 && b2.pos) {
+                                    this.messageManager.createBacteriaMessage(b1, b2);
+                                }
+                            }
                         }
+                    } catch (error) {
+                        console.error(`Erro ao processar comunicação para bactéria ${b1.id}:`, error);
+                    }
+                }
+            } else {
+                // Fallback se o grid espacial não estiver disponível (método menos eficiente)
+                for (let i = 0; i < bacteria.length; i++) {
+                    const b1 = bacteria[i];
+                    
+                    // Verifica se a bactéria é válida
+                    if (!b1 || !b1.pos) {
+                        continue;
+                    }
+                    
+                    try {
+                        // Menor chance de comunicação para evitar sobrecarga no método não otimizado
+                        const communicationChance = this.utils.getPersonalityBasedChance(
+                            b1, 'sociability', this.randomMessageChance * 0.5
+                        );
+                        
+                        if (random() < communicationChance) {
+                            // Busca manualmente uma bactéria próxima
+                            let closestDistance = Infinity;
+                            let closestBacteria = null;
+                            
+                            // Encontra a bactéria mais próxima dentro do alcance
+                            for (let j = 0; j < bacteria.length; j++) {
+                                if (i === j) continue; // Não compara com ela mesma
+                                
+                                const b2 = bacteria[j];
+                                if (!b2 || !b2.pos) continue; // Verifica se é válida
+                                
+                                const distance = dist(b1.pos.x, b1.pos.y, b2.pos.x, b2.pos.y);
+                                
+                                if (distance < this.communicationRange && distance < closestDistance) {
+                                    closestDistance = distance;
+                                    closestBacteria = b2;
+                                }
+                            }
+                            
+                            // Se encontrou uma bactéria próxima, cria mensagem
+                            if (closestBacteria) {
+                                this.messageManager.createBacteriaMessage(b1, closestBacteria);
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Erro ao processar comunicação para bactéria ${b1.id}:`, error);
                     }
                 }
             }
+        } catch (error) {
+            console.error("Erro no sistema de comunicação:", error);
         }
     }
     

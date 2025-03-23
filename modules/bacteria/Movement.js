@@ -17,65 +17,104 @@ class BacteriaMovement {
      * @param {number} speedModifier - Modificador de velocidade (opcional)
      */
     moveRandom(deltaTime, speedModifier = 1.0) {
+        // Verificação de segurança para deltaTime
         deltaTime = deltaTime || 1;
+        
+        // Verificar se o sistema de movimento está inicializado corretamente
+        if (!this.movement || !this.movement.velocity) {
+            console.error("Sistema de movimento não inicializado corretamente em moveRandom");
+            
+            // Tenta reinicializar o movimento
+            if (this.bacteria && this.bacteria.pos) {
+                this.movement = new Movement(this.bacteria.pos.copy(), this.bacteria.size || 10);
+            } else {
+                console.error("Não foi possível reinicializar o movimento: bactéria inválida");
+                return;
+            }
+        }
         
         // Se a velocidade atual está muito baixa, força uma nova direção
         let forceNewDirection = false;
         
-        if (this.movement.velocity.mag() < 0.05) {
+        if (this.movement.velocity.mag() < 0.1) {
             forceNewDirection = true;
         }
         
-        // Chance de mudar de direção (10% por segundo) ou força uma nova direção
-        if (forceNewDirection || random() < 0.01 * deltaTime * 60) {
+        // Chance de mudar de direção (15% por segundo) ou força uma nova direção
+        if (forceNewDirection || random() < 0.015 * deltaTime * 60) {
             // Gera um vetor aleatório para movimento
             const randomDirection = p5.Vector.random2D();
             // Força normalizada
             randomDirection.normalize();
+            
             // Aplica velocidade baseada no gene de velocidade e speedModifier
-            let finalSpeed = speedModifier;
+            let finalSpeed = speedModifier * 1.5; // Aumentado para garantir movimento
+            
             // Incorpora o gene de velocidade se disponível
             if (this.bacteria && this.bacteria.dna && this.bacteria.dna.genes) {
                 const geneSpeed = this.bacteria.dna.genes.speed || 1;
                 finalSpeed *= geneSpeed;
             }
+            
+            // Garante um mínimo de velocidade
+            finalSpeed = Math.max(finalSpeed, 1.0);
+            
             randomDirection.mult(finalSpeed);
             
             // Aplica a força ao sistema de movimento
-            this.movement.setDirection(randomDirection);
+            if (typeof this.movement.setDirection === 'function') {
+                this.movement.setDirection(randomDirection);
+            } else if (typeof this.movement.applyForce === 'function') {
+                // Alternativa: aplica como força
+                this.movement.applyForce(randomDirection);
+            }
             
-            if (forceNewDirection && this.bacteria && this.bacteria.age % 60 === 0) {
-                console.log(`Bactéria ${this.bacteria.id} forçou nova direção: vel=${randomDirection.mag().toFixed(2)}`);
+            if (forceNewDirection) {
+                console.log(`Bactéria ${this.bacteria ? this.bacteria.id : 'desconhecida'} forçou nova direção: vel=${randomDirection.mag().toFixed(2)}`);
             }
         } else {
             // Mantém movimento existente, mas aplica uma pequena força aleatória para evitar ficar parado
             const randomJitter = p5.Vector.random2D();
-            randomJitter.mult(0.2 * speedModifier); // Pequena força aleatória ajustada pelo modificador
-            this.movement.applyForce(randomJitter);
+            randomJitter.mult(0.4 * speedModifier); // Força aleatória aumentada
+            
+            // Aplica a força ao movimento
+            if (typeof this.movement.applyForce === 'function') {
+                this.movement.applyForce(randomJitter);
+            }
         }
         
         // Calcula a razão da idade (0-1)
-        const ageRatio = this.bacteria.age / this.bacteria.lifespan;
+        const ageRatio = this.bacteria && typeof this.bacteria.age === 'number' && typeof this.bacteria.lifespan === 'number' ? 
+                        this.bacteria.age / this.bacteria.lifespan : 0;
         
         // Verifica se a bactéria tem acesso ao sistema de estados
-        const isResting = (this.bacteria.stateManager && 
+        const isResting = (this.bacteria && this.bacteria.stateManager && 
                           typeof this.bacteria.stateManager.getCurrentState === 'function') ? 
                           this.bacteria.stateManager.getCurrentState() === 'resting' : 
-                          (this.bacteria.states && 
+                          (this.bacteria && this.bacteria.states && 
                            typeof this.bacteria.states.getCurrentState === 'function' ? 
                            this.bacteria.states.getCurrentState() === window.BacteriaStates.RESTING : 
                            false);
         
         // Sempre atualiza o movimento com os parâmetros necessários
-        this.movement.update(
-            ageRatio,
-            this.bacteria.simulation ? this.bacteria.simulation.obstacles : [],
-            this.bacteria.size,
-            isResting,
-            deltaTime
-        );
+        if (typeof this.movement.update === 'function') {
+            this.movement.update(
+                ageRatio,
+                this.bacteria && this.bacteria.simulation ? this.bacteria.simulation.obstacles : [],
+                this.bacteria ? this.bacteria.size : 10,
+                isResting,
+                deltaTime
+            );
+        } else {
+            console.error("Método update não encontrado no objeto movement");
+        }
         
-        // Não atualizamos a posição aqui, isso agora é feito no método update da classe Bacteria
+        // Registro de depuração do movimento (reduzido para cada 60 frames para não sobrecarregar)
+        if (this.bacteria && this.bacteria.age % 60 === 0) {
+            console.log(`DEBUG: Posição do movimento: ${this.movement.position.x.toFixed(2)},${this.movement.position.y.toFixed(2)}, 
+                        Velocidade: ${this.movement.velocity.mag().toFixed(2)}, 
+                        Posição da bactéria: ${this.bacteria.pos.x.toFixed(2)},${this.bacteria.pos.y.toFixed(2)}`);
+        }
     }
 
     /**

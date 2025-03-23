@@ -117,8 +117,35 @@ function mousePressed() {
             if (d < b.size * 3) {
                 simulation.selectedBacteria = b;
                 simulation.isDragging = true;
-                b.movement.velocity.set(0, 0);
-                b.states.currentState = window.BacteriaStates.RESTING;
+                
+                // Corrige o acesso à velocidade, verificando a estrutura aninhada
+                try {
+                    if (b.movement) {
+                        if (b.movement.movement && b.movement.movement.velocity) {
+                            // Nova estrutura aninhada
+                            b.movement.movement.velocity.mult(0);
+                        } else if (b.movement.velocity) {
+                            // Estrutura direta
+                            b.movement.velocity.mult(0);
+                        }
+                    }
+                } catch (error) {
+                    console.error("Erro ao parar bactéria selecionada:", error);
+                }
+                
+                // Corrige o acesso ao estado
+                try {
+                    if (b.stateManager && typeof b.stateManager.setCurrentState === 'function') {
+                        b.stateManager.setCurrentState("resting");
+                    } else if (b.states && typeof b.states.setCurrentState === 'function') {
+                        b.states.setCurrentState(window.BacteriaStates.RESTING);
+                    } else if (b.states) {
+                        b.states.currentState = window.BacteriaStates.RESTING;
+                    }
+                } catch (error) {
+                    console.error("Erro ao alterar estado da bactéria selecionada:", error);
+                }
+                
                 return false;
             }
         }
@@ -133,8 +160,13 @@ function mousePressed() {
         }
         
         if (validPosition) {
-            simulation.addFood(mouseX, mouseY);
+            const food = simulation.addFood(mouseX, mouseY);
+            // Adiciona efeito visual
+            if (simulation.effects) {
+                simulation.effects.push(new PopEffect(mouseX, mouseY, "🍪", 20));
+            }
         }
+
         return false;
     }
 }
@@ -164,7 +196,18 @@ function mouseDragged() {
     if (simulation.isDragging && simulation.selectedBacteria) {
         simulation.selectedBacteria.pos.x = constrain(mouseX, 10, width - 10);
         simulation.selectedBacteria.pos.y = constrain(mouseY, 10, height - 10);
-        simulation.selectedBacteria.movement.velocity.set(0, 0);
+        
+        // Corrige o acesso à velocidade, verificando a estrutura aninhada
+        if (simulation.selectedBacteria.movement) {
+            if (simulation.selectedBacteria.movement.movement && 
+                simulation.selectedBacteria.movement.movement.velocity) {
+                // Nova estrutura aninhada
+                simulation.selectedBacteria.movement.movement.velocity.mult(0);
+            } else if (simulation.selectedBacteria.movement.velocity) {
+                // Estrutura direta
+                simulation.selectedBacteria.movement.velocity.mult(0);
+            }
+        }
         
         // Corrige o acesso ao estado
         if (simulation.selectedBacteria.stateManager && 
@@ -207,7 +250,23 @@ function mouseReleased() {
     if (simulation.isDragging && simulation.selectedBacteria) {
         simulation.isDragging = false;
         let newVel = p5.Vector.random2D();
-        simulation.selectedBacteria.movement.velocity.set(newVel.x, newVel.y);
+        
+        // Corrige o acesso à velocidade, verificando a estrutura aninhada
+        try {
+            if (simulation.selectedBacteria.movement) {
+                if (simulation.selectedBacteria.movement.movement && 
+                    simulation.selectedBacteria.movement.movement.velocity) {
+                    // Nova estrutura aninhada
+                    simulation.selectedBacteria.movement.movement.velocity.set(newVel.x, newVel.y);
+                } else if (simulation.selectedBacteria.movement.velocity) {
+                    // Estrutura direta
+                    simulation.selectedBacteria.movement.velocity.set(newVel.x, newVel.y);
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao definir velocidade após arrasto:", error);
+        }
+        
         simulation.selectedBacteria = null;
     }
     return false;
@@ -346,4 +405,50 @@ function initControls() {
             console.log(`Modo de depuração ${debugEnabled ? 'ativado' : 'desativado'}`);
         }
     });
+}
+
+/**
+ * Efeito de popup visual
+ */
+class PopEffect {
+    /**
+     * Cria um novo efeito de pop
+     * @param {number} x - Posição X 
+     * @param {number} y - Posição Y
+     * @param {string} symbol - Símbolo a mostrar
+     * @param {number} duration - Duração em frames
+     */
+    constructor(x, y, symbol, duration = 30) {
+        this.pos = createVector(x, y);
+        this.symbol = symbol || "✓";
+        this.duration = duration;
+        this.timer = duration;
+        this.scale = 1.0;
+        this.alpha = 255;
+    }
+    
+    /**
+     * Atualiza o efeito
+     * @returns {boolean} - Verdadeiro se o efeito ainda está ativo
+     */
+    update() {
+        this.timer--;
+        this.pos.y -= 0.5; // Sobe lentamente
+        this.scale = 1.0 + (1 - this.timer/this.duration) * 0.5; // Aumenta gradualmente
+        this.alpha = 255 * (this.timer/this.duration); // Desaparece gradualmente
+        
+        return this.timer > 0;
+    }
+    
+    /**
+     * Desenha o efeito
+     */
+    draw() {
+        push();
+        textAlign(CENTER, CENTER);
+        textSize(18 * this.scale);
+        fill(255, 255, 255, this.alpha);
+        text(this.symbol, this.pos.x, this.pos.y);
+        pop();
+    }
 } 

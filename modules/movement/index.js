@@ -79,6 +79,19 @@ class Movement {
     }
 
     /**
+     * Aplica amortecimento à velocidade atual
+     * @param {number} damping - Fator de amortecimento (0-1)
+     */
+    applyDamping(damping) {
+        if (this.velocity) {
+            this.velocity.mult(damping);
+        }
+        if (this.base && this.base.velocity) {
+            this.base.velocity.mult(damping);
+        }
+    }
+
+    /**
      * Busca um alvo
      * @param {p5.Vector} target - Posição do alvo
      * @param {number} perception - Raio de percepção

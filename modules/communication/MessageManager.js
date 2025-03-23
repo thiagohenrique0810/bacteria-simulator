@@ -115,33 +115,70 @@ class MessageManager {
      * Cria uma mensagem entre duas bactérias
      * @param {Bacteria} sender - Bactéria que envia
      * @param {Bacteria} receiver - Bactéria que recebe
+     * @returns {boolean} - True se a mensagem foi criada com sucesso
      */
     createBacteriaMessage(sender, receiver) {
-        const relationshipManager = this.communicationSystem.relationshipManager;
-        const messageGenerator = this.communicationSystem.messageGenerator;
-        const utils = this.communicationSystem.utils;
-        
-        // Determina o tipo de comunicação baseado no contexto
-        const msgType = messageGenerator.determineMessageType(sender, receiver);
-        
-        // Gera o conteúdo da mensagem
-        const content = messageGenerator.generateMessage(sender, receiver, msgType);
-        
-        // Cria o objeto da mensagem
-        const message = {
-            senderId: utils.getBacteriaId(sender),
-            receiverId: utils.getBacteriaId(receiver),
-            isFemale: sender.isFemale,
-            type: msgType,
-            content: content,
-            time: utils.getFormattedTime()
-        };
-        
-        // Adiciona a mensagem ao histórico
-        this.addMessage(message);
-        
-        // Atualiza relacionamentos
-        relationshipManager.updateRelationship(sender, receiver, msgType);
+        try {
+            // Verifica se as bactérias são válidas
+            if (!sender || !receiver) {
+                console.warn("MessageManager: Tentativa de criar mensagem com bactéria inválida");
+                return false;
+            }
+            
+            // Verifica se os IDs existem
+            const utils = this.communicationSystem.utils;
+            const senderId = utils.getBacteriaId(sender);
+            const receiverId = utils.getBacteriaId(receiver);
+            
+            if (!senderId || !receiverId) {
+                console.warn("MessageManager: Bactérias sem IDs válidos");
+                return false;
+            }
+            
+            const relationshipManager = this.communicationSystem.relationshipManager;
+            const messageGenerator = this.communicationSystem.messageGenerator;
+            
+            // Determina o tipo de comunicação baseado no contexto (com tratamento de erro)
+            const msgType = messageGenerator.determineMessageType(sender, receiver);
+            
+            // Se não foi possível determinar o tipo, cancela
+            if (!msgType) {
+                console.warn("MessageManager: Não foi possível determinar o tipo de mensagem");
+                return false;
+            }
+            
+            // Gera o conteúdo da mensagem
+            const content = messageGenerator.generateMessage(sender, receiver, msgType);
+            
+            // Verifica se o conteúdo foi gerado
+            if (!content) {
+                console.warn("MessageManager: Não foi possível gerar o conteúdo da mensagem");
+                return false;
+            }
+            
+            // Cria o objeto da mensagem com verificações seguras
+            const message = {
+                senderId: senderId,
+                receiverId: receiverId,
+                isFemale: sender.isFemale === true, // Garante que seja um booleano
+                type: msgType,
+                content: content,
+                time: utils.getFormattedTime()
+            };
+            
+            // Adiciona a mensagem ao histórico
+            this.addMessage(message);
+            
+            // Atualiza relacionamentos
+            if (relationshipManager && typeof relationshipManager.updateRelationship === 'function') {
+                relationshipManager.updateRelationship(sender, receiver, msgType);
+            }
+            
+            return true;
+        } catch (error) {
+            console.error("Erro ao criar mensagem entre bactérias:", error);
+            return false;
+        }
     }
     
     /**

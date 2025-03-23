@@ -18,6 +18,11 @@ class MessageGenerator {
      * @returns {string} - Tipo de mensagem
      */
     determineMessageType(sender, receiver) {
+        if (!sender || !receiver) {
+            console.warn("MessageGenerator: sender ou receiver inválido");
+            return null;
+        }
+        
         const messageTypes = this.communicationSystem.messageManager.messageTypes;
         const relationshipManager = this.communicationSystem.relationshipManager;
         const simulation = this.communicationSystem.simulation;
@@ -30,17 +35,62 @@ class MessageGenerator {
             dist(sender.pos.x, sender.pos.y, p.pos.x, p.pos.y) < sender.perceptionRadius
         );
         
-        // Verifica o estado atual das bactérias
-        const senderState = sender.states.getCurrentState();
-        const receiverState = receiver.states.getCurrentState();
+        // Verifica o estado atual das bactérias com segurança
+        let senderState = null;
+        let receiverState = null;
+        
+        // Verifica sender.states de forma segura
+        if (sender.states && typeof sender.states.getCurrentState === 'function') {
+            senderState = sender.states.getCurrentState();
+        } else if (sender.stateManager && typeof sender.stateManager.getCurrentState === 'function') {
+            senderState = sender.stateManager.getCurrentState();
+        }
+        
+        // Verifica receiver.states de forma segura
+        if (receiver.states && typeof receiver.states.getCurrentState === 'function') {
+            receiverState = receiver.states.getCurrentState();
+        } else if (receiver.stateManager && typeof receiver.stateManager.getCurrentState === 'function') {
+            receiverState = receiver.stateManager.getCurrentState();
+        }
+        
+        // Se não foi possível determinar os estados, retorna uma mensagem padrão
+        if (senderState === null || receiverState === null) {
+            return messageTypes.GREETING;
+        }
         
         // Pode avisar sobre perigo
         if (predatorNearby && random() < 0.7) {
             return messageTypes.DANGER_WARNING;
         }
         
+        // Obtém energia de forma segura
+        const getSenderEnergy = () => {
+            if (sender.states && typeof sender.states.getEnergy === 'function') {
+                return sender.states.getEnergy();
+            } else if (sender.stateManager && typeof sender.stateManager.getEnergy === 'function') {
+                return sender.stateManager.getEnergy();
+            } else if (typeof sender.energy === 'number') {
+                return sender.energy;
+            }
+            return 50; // valor padrão se não conseguir obter
+        };
+        
+        const getReceiverEnergy = () => {
+            if (receiver.states && typeof receiver.states.getEnergy === 'function') {
+                return receiver.states.getEnergy();
+            } else if (receiver.stateManager && typeof receiver.stateManager.getEnergy === 'function') {
+                return receiver.stateManager.getEnergy();
+            } else if (typeof receiver.energy === 'number') {
+                return receiver.energy;
+            }
+            return 50; // valor padrão se não conseguir obter
+        };
+        
+        const senderEnergy = getSenderEnergy();
+        const receiverEnergy = getReceiverEnergy();
+        
         // Se estiver com pouca energia, pode pedir comida
-        if (sender.states.getEnergy() < 30 && random() < 0.5) {
+        if (senderEnergy < 30 && random() < 0.5) {
             return messageTypes.HELP_REQUEST;
         }
         
@@ -51,29 +101,37 @@ class MessageGenerator {
         
         // Pode tentar reprodução se for de sexos opostos e tiver energia
         if (sender.isFemale !== receiver.isFemale && 
-            sender.states.getEnergy() > 60 && 
-            receiver.states.getEnergy() > 60 &&
+            senderEnergy > 60 && 
+            receiverEnergy > 60 &&
             random() < 0.3) {
             return messageTypes.MATING;
         }
         
+        // Verifica genes de forma segura
+        const getSenderGene = (geneName, defaultValue = 0.5) => {
+            if (sender.dna && sender.dna.genes && typeof sender.dna.genes[geneName] === 'number') {
+                return sender.dna.genes[geneName];
+            }
+            return defaultValue;
+        };
+        
         // Se for agressivo, chance de mensagem agressiva
-        if (sender.dna.genes.aggressiveness > 0.7 && random() < 0.4) {
+        if (getSenderGene('aggressiveness') > 0.7 && random() < 0.4) {
             return messageTypes.AGGRESSIVE;
         }
         
         // Se for sociável, chance de amizade
-        if (sender.dna.genes.sociability > 0.7 && random() < 0.3) {
+        if (getSenderGene('sociability') > 0.7 && random() < 0.3) {
             return messageTypes.FRIENDSHIP;
         }
         
         // Se for o primeiro contato, provavelmente é um cumprimento
-        if (!relationship && random() < 0.5) {
+        if (!relationship || relationship.interactions.length === 0) {
             return messageTypes.GREETING;
         }
         
-        // Caso contrário, mensagem aleatória
-        return messageTypes.RANDOM;
+        // Caso padrão é um comentário aleatório
+        return messageTypes.RANDOM_COMMENT;
     }
     
     /**

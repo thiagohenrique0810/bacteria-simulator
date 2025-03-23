@@ -164,6 +164,40 @@ class BacteriaBase {
         this.friendships.clear();
         this.enemies.clear();
     }
+
+    /**
+     * Atualiza a bactéria a cada frame
+     * @param {number} deltaTime - Tempo desde o último frame
+     */
+    update(deltaTime = 1) {
+        try {
+            // Incrementa a idade
+            this.age += deltaTime;
+            
+            // Verifica se deve morrer de velhice
+            if (this.age >= this.lifespan) {
+                this.die("velhice");
+                return;
+            }
+            
+            // Verifica saúde
+            if (this.health <= 0) {
+                this.die("saúde");
+                return;
+            }
+            
+            // Atualiza os subsistemas
+            if (this.social) this.social.update();
+            
+            // Processa o comportamento com o novo sistema integrado de IA e movimento
+            this.processBehavior(deltaTime);
+            
+            // Atualiza a visualização
+            if (this.visualization) this.visualization.update();
+        } catch (error) {
+            console.error("Erro ao atualizar bactéria:", error);
+        }
+    }
 }
 
 // Exporta a classe para uso global

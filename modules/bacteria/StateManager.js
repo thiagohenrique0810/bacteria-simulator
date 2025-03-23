@@ -34,6 +34,22 @@ class BacteriaStateManager {
         
         // Contador de alternâncias entre estados
         this.stateAlternations = {};
+        
+        // Parâmetros contínuos de movimento
+        this.movementParams = {
+            direction: 0,           // Direção de 0-360 graus
+            speed: 0.5,             // Velocidade de 0-1
+            wanderStrength: 0.3,    // Intensidade do movimento aleatório
+            noiseStrength: 0.2,     // Intensidade do ruído perlin
+            targetWeight: 0.5       // Peso do alvo vs. movimento aleatório
+        };
+        
+        // Estado de transição para suavização de mudanças
+        this.isTransitioning = false;
+        this.transitionStartTime = 0;
+        this.transitionDuration = 30; // Meio segundo em 60fps
+        this.transitionFromState = '';
+        this.transitionToState = '';
     }
     
     /**
@@ -45,7 +61,29 @@ class BacteriaStateManager {
     }
     
     /**
-     * Define o estado atual
+     * Obtém os parâmetros de movimento atuais
+     * @returns {Object} Parâmetros de movimento
+     */
+    getMovementParams() {
+        return this.movementParams;
+    }
+    
+    /**
+     * Define os parâmetros de movimento
+     * @param {Object} params - Novos parâmetros de movimento
+     */
+    setMovementParams(params) {
+        if (!params) return;
+        
+        // Atualiza apenas os parâmetros definidos, mantendo os valores anteriores para os demais
+        this.movementParams = {
+            ...this.movementParams,
+            ...params
+        };
+    }
+    
+    /**
+     * Define o estado atual com transição suave
      * @param {string} state - Novo estado para a bactéria
      */
     setCurrentState(state) {
@@ -73,12 +111,18 @@ class BacteriaStateManager {
                 this.stateAlternations = {}; // Reseta contadores
             }
             
+            // Configura a transição suave entre estados
+            this.isTransitioning = true;
+            this.transitionStartTime = frameCount;
+            this.transitionFromState = this.currentState;
+            this.transitionToState = state;
+            
             this.lastState = this.currentState;
             this.lastStateChangeTime = frameCount;
             this.currentState = state;
             
             // Log da mudança de estado
-            console.log(`Bactéria ${this.bacteria.id} mudou para estado: ${state}`);
+            console.log(`Bactéria ${this.bacteria.id} está mudando para estado: ${state}`);
             
             // Aplica cooldown para prevenir mudanças rápidas de estado
             this.stateChangeCooldown = this.maxStateChangeCooldown;
@@ -93,6 +137,31 @@ class BacteriaStateManager {
                 this.restingTime = 0;
             }
         }
+    }
+    
+    /**
+     * Processa a transição suave entre estados
+     */
+    updateTransition() {
+        if (!this.isTransitioning) return;
+        
+        // Calcula o progresso da transição (0 a 1)
+        const elapsed = frameCount - this.transitionStartTime;
+        const progress = Math.min(1, elapsed / this.transitionDuration);
+        
+        // Se a transição foi concluída
+        if (progress >= 1) {
+            this.isTransitioning = false;
+            return;
+        }
+        
+        // Funções de easing para suavizar a transição (easeInOutCubic)
+        const easeProgress = progress < 0.5 
+            ? 4 * progress * progress * progress 
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+            
+        // Não precisamos fazer interpolação de estado, pois estados são discretos
+        // Mas poderíamos ajustar os parâmetros de movimento durante a transição, se necessário
     }
     
     /**
@@ -130,12 +199,21 @@ class BacteriaStateManager {
     /**
      * Atualiza o gerenciador de estados
      * @param {Object} conditions - Condições do ambiente
+     * @param {Object} actionOutput - Saída do sistema de aprendizado
      * @returns {Object} Informações sobre o estado atual
      */
-    update(conditions = null) {
-        // Log para debugging
-        if (frameCount % 60 === 0) {
-            console.log(`StateManager update: energy=${this.currentEnergy.toFixed(1)}, state=${this.currentState}, timer=${this.stateTimer}`);
+    update(conditions = null, actionOutput = null) {
+        // Processa transições suaves
+        this.updateTransition();
+        
+        // Atualiza parâmetros de movimento com base na saída do sistema de aprendizado
+        if (actionOutput && actionOutput.movementParams) {
+            this.setMovementParams(actionOutput.movementParams);
+        }
+        
+        // Define o estado com base na decisão da IA (se fornecida)
+        if (actionOutput && actionOutput.action) {
+            this.setCurrentState(actionOutput.action);
         }
         
         // Decrementa cooldowns
@@ -152,100 +230,58 @@ class BacteriaStateManager {
             }
         }
         
-        // Incrementa o timer geral
-        this.stateTimer++;
-        
-        // Força estado de exploração de tempos em tempos para evitar ficar preso em descanso
-        if (this.stateTimer >= this.forceExploreInterval) {
-            this.setCurrentState('exploring');
-            this.stateTimer = 0;
-            console.log(`Forçando estado de exploração para bactéria ${this.bacteria.id}`);
-        }
-        
-        // Se está descansando, incrementa o contador de descanso
+        // Gerenciamento de energia com base no estado atual
         if (this.currentState === 'resting') {
+            // Recupera energia durante descanso
+            this.addEnergy(0.15);
             this.restingTime++;
             
-            // Se descansar por muito tempo, força mudar para exploração
-            if (this.restingTime >= this.maxRestingTime) {
+            // Sai do descanso após um tempo ou quando a energia estiver completa
+            if (this.restingTime > this.maxRestingTime || this.currentEnergy >= 98) {
                 this.setCurrentState('exploring');
-                this.restingTime = 0;
-                console.log(`Interrompendo descanso por tempo excessivo para bactéria ${this.bacteria.id}`);
             }
-        }
-        
-        // Determina o estado baseado nas condições, se não estiver no tempo de exploração forçada
-        if (this.stateTimer < this.forceExploreInterval - 30 && this.stateChangeCooldown === 0) {
-            if (conditions) {
-                // Sempre prioriza fuga de predadores, ignorando qualquer cooldown
-                if (conditions.predatorNearby) {
-                    this.setCurrentState('fleeing');
-                } 
-                // Prioriza comida se estiver com menos de 70 de energia
-                else if (conditions.foodNearby && this.currentEnergy < 70) {
-                    this.setCurrentState('seekingFood');
-                } 
-                // Prioriza reprodução se tiver bastante energia e não estiver em cooldown
-                else if (conditions.mateNearby && conditions.mateReady && this.currentEnergy > 80 && this.reproductionCooldown === 0) {
-                    this.setCurrentState('reproducing');
-                } 
-                // Só descansa se a energia estiver muito baixa
-                else if (this.currentEnergy < 20) {
-                    this.setCurrentState('resting');
-                } 
-                // Caso contrário, explora
-                else {
-                    this.setCurrentState('exploring');
-                }
-                
-                // Se há um estado forçado do Q-Learning, use-o apenas se não estiver em cooldown
-                if (conditions.forcedState && this.stateChangeCooldown === 0) {
-                    const previousState = this.currentState;
-                    
-                    switch (conditions.forcedState) {
-                        case 'seekFood': this.setCurrentState('seekingFood'); break;
-                        case 'seekMate': 
-                            // Verifica cooldown de reprodução e se o parceiro está pronto
-                            if (this.reproductionCooldown === 0 && conditions.mateReady) {
-                                this.setCurrentState('reproducing'); 
-                            }
-                            break;
-                        case 'rest': 
-                            // Limita o estado de descanso por q-learning também
-                            if (this.restingTime < this.maxRestingTime) {
-                                this.setCurrentState('resting'); 
-                            } else {
-                                console.log(`Ignorando estado de descanso forçado por tempo excessivo`);
-                            }
-                            break;
-                        case 'explore': this.setCurrentState('exploring'); break;
-                    }
-                }
-            }
-        }
-        
-        // Consume energia baseado no estado
-        if (this.currentState === 'resting') {
-            this.addEnergy(0.2); // Aumentado para recuperar energia mais rápido
         } else if (this.currentState === 'reproducing') {
-            // Consume mais energia ao se reproduzir
-            this.removeEnergy(0.15);
-        } else {
-            this.removeEnergy(0.05);
+            // Gasto alto de energia durante reprodução
+            this.consumeEnergy(0.3);
+        } else if (this.currentState === 'seekingFood' || this.currentState === 'seekFood') {
+            // Gasto moderado de energia durante busca por comida
+            this.consumeEnergy(0.1);
+        } else if (this.currentState === 'seekingMate' || this.currentState === 'seekMate') {
+            // Gasto moderado de energia durante busca por parceiro
+            this.consumeEnergy(0.15);
+        } else if (this.currentState === 'exploring' || this.currentState === 'explore') {
+            // Gasto normal de energia durante exploração
+            this.consumeEnergy(0.08);
+        } else if (this.currentState === 'fleeing') {
+            // Gasto alto de energia durante fuga
+            this.consumeEnergy(0.25);
         }
         
-        // IMPORTANTE: Nunca deixa a energia chegar em 0
-        if (this.currentEnergy < 10) {
-            this.currentEnergy = 10;
+        // Se a energia estiver muito baixa, força o estado de descanso
+        if (this.currentEnergy < 15 && this.currentState !== 'resting') {
+            this.setCurrentState('resting');
+        }
+        
+        // Força exploração ocasionalmente se ficar preso no mesmo estado
+        this.stateTimer++;
+        if (this.stateTimer > this.forceExploreInterval && 
+            this.currentState !== 'exploring' && 
+            this.currentState !== 'reproducing') {
+            this.setCurrentState('exploring');
+            this.stateTimer = 0;
+        }
+        
+        // Reset do timer se não estamos explorando
+        if (this.currentState === 'exploring') {
+            this.stateTimer = 0;
         }
         
         // Retorna informações sobre o estado atual
         return {
             state: this.currentState,
             energy: this.currentEnergy,
-            shouldMove: this.currentState !== 'resting', // Só não se move se estiver descansando
-            targetType: this.getTargetTypeFromState(),
-            speedMultiplier: this.getSpeedMultiplierFromState()
+            isTransitioning: this.isTransitioning,
+            movementParams: this.movementParams
         };
     }
     

@@ -128,6 +128,7 @@ bacterias/
 │   │   ├── Social.js        # Interações sociais
 │   │   ├── StateManager.js  # Gerenciador de estados das bactérias
 │   │   ├── Visualization.js # Representação visual
+│   │   ├── Bacteria.js      # Classe de implementação da bactéria
 │   │   └── index.js         # Integração dos componentes de bactéria
 │   ├── communication/       # Sistema de comunicação modularizado
 │   │   ├── CommunicationUtils.js       # Funções utilitárias
@@ -182,10 +183,18 @@ bacterias/
 │   ├── predatorStates.js    # Estados dos predadores
 │   ├── reproduction.js      # Sistema reprodutivo
 │   ├── save.js              # Sistema de salvamento
+│   ├── saveSystem.js        # Sistema avançado de salvamento
+│   ├── attackEffect.js      # Efeitos visuais de ataques
+│   ├── randomEvents.js      # Sistema de eventos aleatórios
 │   ├── simulation.js        # Adaptador da simulação (compatibilidade)
 │   ├── utils.js             # Funções utilitárias
+│   ├── controls.js          # Sistema de controles (compatibilidade)
 │   └── visualization.js     # Sistema visual
-└── favicon.ico              # Ícone do site
+├── modulo-comunicacao.md    # Documentação do sistema de comunicação
+├── MELHORIAS.md             # Registro de melhorias implementadas
+├── food.js                  # Sistema de alimentação (raiz)
+├── favicon.ico              # Ícone do site
+└── LICENSE                  # Licença do projeto
 ```
 
 ## Otimizações e Melhorias Recentes
@@ -347,6 +356,11 @@ bacterias/
 - **Adaptação Dinâmica**: Algoritmos melhorados para adaptação das entidades ao ambiente
 - **Ecossistemas Temáticos**: Ambientes especializados com regras e dinâmicas próprias
 - **Sistema Neural Avançado**: Novos tipos de redes neurais e algoritmos de aprendizado
+
+## Documentação Adicional
+
+- **MELHORIAS.md**: Contém um registro detalhado das melhorias implementadas no simulador, incluindo otimizações de desempenho, melhorias no sistema de IA, evolução genética avançada, e outras atualizações recentes.
+- **modulo-comunicacao.md**: Documentação específica sobre a implementação do sistema de comunicação entre bactérias, incluindo estratégias para desenvolvimento de linguagem própria e comunicação contextual.
 
 ## Contribuindo
 

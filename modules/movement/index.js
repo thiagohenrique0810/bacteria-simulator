@@ -46,28 +46,25 @@ class Movement {
      * @param {number} ageRatio - Razão da idade (0-1)
      * @param {Array} obstacles - Lista de obstáculos
      * @param {number} size - Tamanho da bactéria
+     * @param {boolean} avoidEdges - Se deve evitar as bordas
      * @param {boolean} isResting - Se está descansando
-     * @param {number} deltaTime - Tempo desde o último frame
      */
-    update(ageRatio, obstacles, size, isResting, deltaTime = 1/60) {
-        // Atualiza o movimento base
-        const didMove = this.base.updateBase(ageRatio, isResting, deltaTime);
-        
-        if (didMove) {
-            // Evita obstáculos se estiver em movimento
-            this.obstacle.avoidObstacles(obstacles, size);
+    update(ageRatio, obstacles, size, avoidEdges = true, isResting = false) {
+        try {
+            // Atualiza o movimento base com o novo método update
+            this.base.update(ageRatio, obstacles, size, avoidEdges, isResting);
             
-            // Trata colisões diretas caso ocorram
-            this.obstacle.handleCollisions(obstacles, size);
+            // Atualiza propriedades para compatibilidade
+            this.position = this.base.position;
+            this.velocity = this.base.velocity;
+            this.acceleration = this.base.acceleration;
+        } catch (error) {
+            console.error("Erro no movimento:", error);
+            // Recuperação de erro: garante que a posição seja válida
+            if (!this.position || isNaN(this.position.x) || isNaN(this.position.y)) {
+                this.position = createVector(random(width), random(height));
+            }
         }
-        
-        // Mantém dentro dos limites
-        this.base.constrainToBounds(size);
-        
-        // Atualiza propriedades para compatibilidade
-        this.position = this.base.position;
-        this.velocity = this.base.velocity;
-        this.acceleration = this.base.acceleration;
     }
 
     /**
@@ -79,16 +76,11 @@ class Movement {
     }
 
     /**
-     * Aplica amortecimento à velocidade atual
+     * Aplica amortecimento à velocidade
      * @param {number} damping - Fator de amortecimento (0-1)
      */
     applyDamping(damping) {
-        if (this.velocity) {
-            this.velocity.mult(damping);
-        }
-        if (this.base && this.base.velocity) {
-            this.base.velocity.mult(damping);
-        }
+        this.base.applyDamping(damping);
     }
 
     /**

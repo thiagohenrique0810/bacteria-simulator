@@ -26,6 +26,9 @@ class Predator extends Bacteria {
         this.velocity = createVector(random(-1, 1), random(-1, 1));
         this.velocity.setMag(this.maxSpeed);
         
+        // Inicializa o sistema de movimento apropriado para o predador
+        this.initializeMovement();
+        
         // Configurações de reprodução
         this.canReproduce = true;
         this.reproductionEnergyCost = 40;
@@ -39,6 +42,97 @@ class Predator extends Bacteria {
         this.healthLossRate = 0.03; // Perde saúde mais lentamente
         this.starvationTime = 120 * 60; // Mais tempo sem precisar comer
         this.perceptionRadius = 250; // Maior raio de percepção
+    }
+
+    /**
+     * Inicializa o sistema de movimento do predador
+     */
+    initializeMovement() {
+        try {
+            // Cria um objeto de movimento básico se não existir
+            if (!this.movement) {
+                // Verifica se podemos usar MovementBase
+                if (window.MovementBase) {
+                    // Inicializa o movimento com posição da bactéria e velocidade inicial
+                    const initPosition = createVector(this.pos.x, this.pos.y);
+                    const initVelocity = createVector(random(-1, 1), random(-1, 1));
+                    initVelocity.setMag(this.maxSpeed * 0.5); // Começa com metade da velocidade máxima
+                    
+                    this.movement = {
+                        position: initPosition,
+                        velocity: initVelocity,
+                        acceleration: createVector(0, 0),
+                        maxSpeed: this.maxSpeed,
+                        maxForce: 0.2,
+                        
+                        // Método para definir direção
+                        setDirection: function(direction) {
+                            this.velocity = direction.copy();
+                            this.velocity.limit(this.maxSpeed);
+                        },
+                        
+                        // Método para parar o movimento
+                        stop: function() {
+                            this.velocity.mult(0.8);
+                        },
+                        
+                        // Método para retomar o movimento
+                        resume: function() {
+                            // Nada a fazer, só garante que o método existe
+                        },
+                        
+                        // Método para atualizar posição
+                        update: function(ageRatio, obstacles, size, canPassThrough, deltaTime = 1) {
+                            // Aplicar efeito de idade - predadores mais velhos se movem mais lentamente
+                            const ageFactor = 1 - (ageRatio * 0.3);
+                            
+                            // Calcular nova posição
+                            this.velocity.limit(this.maxSpeed * ageFactor);
+                            this.position.add(p5.Vector.mult(this.velocity, deltaTime));
+                            
+                            // Verificar colisões com obstáculos
+                            if (obstacles && !canPassThrough) {
+                                for (let obstacle of obstacles) {
+                                    if (obstacle && obstacle.pos) {
+                                        const d = dist(this.position.x, this.position.y, obstacle.pos.x, obstacle.pos.y);
+                                        if (d < (size + obstacle.size) / 2) {
+                                            // Ajusta a posição para evitar sobreposição
+                                            const pushDirection = p5.Vector.sub(this.position, obstacle.pos);
+                                            pushDirection.normalize();
+                                            pushDirection.mult((size + obstacle.size) / 2 - d + 1);
+                                            this.position.add(pushDirection);
+                                            
+                                            // Reflete a velocidade
+                                            const reflection = p5.Vector.reflect(this.velocity, pushDirection);
+                                            this.velocity = reflection;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Manter dentro dos limites da tela
+                            this.position.x = constrain(this.position.x, size/2, width - size/2);
+                            this.position.y = constrain(this.position.y, size/2, height - size/2);
+                        }
+                    };
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao inicializar movimento do predador:", error);
+            // Fallback: criar um objeto movement mínimo
+            this.movement = {
+                position: this.pos.copy(),
+                velocity: createVector(0, 0),
+                setDirection: (dir) => { this.velocity = dir.copy(); },
+                stop: () => { this.velocity.mult(0); },
+                resume: () => {},
+                update: () => { 
+                    this.pos.add(this.velocity); 
+                    this.pos.x = constrain(this.pos.x, 0, width);
+                    this.pos.y = constrain(this.pos.y, 0, height);
+                }
+            };
+        }
     }
 
     /**
@@ -295,48 +389,104 @@ class Predator extends Bacteria {
      * @param {Predator} partner - Parceiro para reprodução
      */
     updateMovement(stateActions, obstacles, prey, partner) {
-        if (!stateActions.shouldMove) {
-            this.movement.stop();
-            return;
-        }
-
-        this.movement.resume();
-        let target = null;
-
-        switch (stateActions.targetType) {
-            case 'hunt':
-                if (prey) {
-                    target = prey.pos;
+        try {
+            if (!stateActions.shouldMove) {
+                if (this.movement && typeof this.movement.stop === 'function') {
+                    this.movement.stop();
                 }
-                break;
-            case 'mate':
-                if (partner) {
-                    target = partner.pos;
+                return;
+            }
+
+            if (this.movement && typeof this.movement.resume === 'function') {
+                this.movement.resume();
+            }
+            
+            let target = null;
+
+            switch (stateActions.targetType) {
+                case 'hunt':
+                    if (prey && prey.pos) {
+                        target = prey.pos;
+                    }
+                    break;
+                case 'mate':
+                    if (partner && partner.pos) {
+                        target = partner.pos;
+                    }
+                    break;
+                case 'random':
+                    if (random() < 0.02) {
+                        target = createVector(
+                            random(width),
+                            random(height)
+                        );
+                    }
+                    break;
+            }
+
+            // Implementando a lógica de seek manualmente em vez de usar this.movement.seek
+            if (target) {
+                // Calculamos a direção para o alvo
+                const direction = createVector(
+                    target.x - this.pos.x,
+                    target.y - this.pos.y
+                );
+                
+                // Verificamos se estamos próximos do alvo
+                const distance = direction.mag();
+                
+                // Só precisamos nos mover se não estivermos muito próximos do alvo
+                if (distance > 5) {
+                    // Normaliza o vetor e aplica a velocidade adequada
+                    direction.normalize();
+                    direction.mult(this.maxSpeed * (stateActions.speedMultiplier || 1.0));
+                    
+                    // Define a direção como a velocidade do predador
+                    this.velocity = direction;
+                    
+                    // Aplica a direção ao movement se disponível
+                    if (this.movement && typeof this.movement.setDirection === 'function') {
+                        this.movement.setDirection(direction);
+                    }
                 }
-                break;
-            case 'random':
-                if (random() < 0.02) {
-                    target = createVector(
-                        random(width),
-                        random(height)
-                    );
+            }
+
+            // Atualiza o sistema de movimento
+            if (this.movement && typeof this.movement.update === 'function') {
+                this.movement.update(
+                    this.age / this.lifespan,
+                    obstacles,
+                    this.size,
+                    true // Predadores podem atravessar bactérias
+                );
+                
+                // Atualiza posição a partir do sistema de movimento
+                if (this.movement.position) {
+                    this.pos.set(this.movement.position);
                 }
-                break;
+            } else {
+                // Fallback: atualiza a posição baseado na velocidade
+                this.pos.add(this.velocity);
+                
+                // Mantém dentro dos limites da tela
+                this.pos.x = constrain(this.pos.x, 0, width);
+                this.pos.y = constrain(this.pos.y, 0, height);
+                
+                // Log para debug
+                if (frameCount % 180 === 0) {
+                    console.log(`Predador movendo com velocidade: ${this.velocity.mag().toFixed(2)}`);
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao atualizar movimento do predador:", error);
+            
+            // Em caso de erro, aplica um movimento aleatório seguro
+            if (!this.velocity) this.velocity = createVector(random(-1, 1), random(-1, 1));
+            this.velocity.setMag(1);
+            this.pos.add(this.velocity);
+            this.pos.x = constrain(this.pos.x, 0, width);
+            this.pos.y = constrain(this.pos.y, 0, height);
         }
-
-        if (target) {
-            this.movement.seek(target, this.perceptionRadius, stateActions.speedMultiplier);
-        }
-
-        this.movement.update(
-            this.age / this.lifespan,
-            obstacles,
-            this.size,
-            true // Predadores podem atravessar bactérias
-        );
-
-        // Atualiza posição
-        this.pos.set(this.movement.position);
     }
 
     /**

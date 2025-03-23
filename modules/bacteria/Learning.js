@@ -20,10 +20,19 @@ class BacteriaLearning {
         };
 
         // Sistema Neural
-        this.brain = new NeuralNetwork();
+        this.brain = new NeuralNetwork(12, 12, 5); // 12 inputs, 12 neurônios na camada oculta, 5 outputs
         this.useNeural = true; // Flag para alternar entre Q-Learning e Rede Neural
         this.lastNeuralInputs = null;
         this.lastNeuralOutputs = null;
+        
+        // Parâmetros contínuos para movimento mais orgânico
+        this.movementParams = {
+            direction: 0,           // Direção de 0-360 graus
+            speed: 0.5,             // Velocidade de 0-1
+            wanderStrength: 0.3,    // Intensidade do movimento aleatório
+            noiseStrength: 0.2,     // Intensidade do ruído perlin
+            targetWeight: 0.5       // Peso do alvo vs. movimento aleatório
+        };
     }
 
     /**
@@ -54,25 +63,43 @@ class BacteriaLearning {
         // Garante que o valor está entre 0 e 1
         normalizedEnergy = Math.max(0, Math.min(1, normalizedEnergy));
         
+        // Calcula idade normalizada com segurança para evitar NaN
+        let ageNormalized = 0.5; // Valor padrão caso não consiga calcular
+        if (this.bacteria && typeof this.bacteria.age === 'number' && 
+            typeof this.bacteria.lifespan === 'number' && this.bacteria.lifespan > 0) {
+            ageNormalized = this.bacteria.age / this.bacteria.lifespan;
+            // Garante que o valor está entre 0 e 1
+            ageNormalized = Math.max(0, Math.min(1, ageNormalized));
+        }
+        
+        // Inicializa o valor de curiosidade da bactéria
+        let curiosity = 0.5; // Valor padrão
+        if (this.bacteria && this.bacteria.dna && this.bacteria.dna.genes && 
+            typeof this.bacteria.dna.genes.curiosity === 'number') {
+            curiosity = this.bacteria.dna.genes.curiosity;
+            // Garante que o valor está entre 0 e 1
+            curiosity = Math.max(0, Math.min(1, curiosity));
+        }
+        
         // Retorna o array de inputs normalizado
         return [
-            this.bacteria.health / 100, // Saúde normalizada
+            this.bacteria && typeof this.bacteria.health === 'number' ? this.bacteria.health / 100 : 0.5, // Saúde normalizada
             normalizedEnergy, // Energia normalizada (já calculada)
             conditions.foodNearby ? 1 : 0, // Comida próxima
+            conditions.foodDistance ? Math.min(1, 1/conditions.foodDistance) : 0, // Distância inversamente proporcional
             conditions.mateNearby ? 1 : 0, // Parceiro próximo
+            conditions.mateDistance ? Math.min(1, 1/conditions.mateDistance) : 0, // Distância inversamente proporcional
             conditions.predatorNearby ? 1 : 0, // Predador próximo
             conditions.friendsNearby ? 1 : 0, // Amigos próximos
-            conditions.enemiesNearby ? 1 : 0, // Inimigos próximos
-            this.bacteria.age / this.bacteria.lifespan, // Idade normalizada
-            this.bacteria.dna && this.bacteria.dna.genes ? this.bacteria.dna.genes.aggressiveness || 0.5 : 0.5, // Agressividade
-            this.bacteria.dna && this.bacteria.dna.genes ? this.bacteria.dna.genes.sociability || 0.5 : 0.5 // Sociabilidade
+            ageNormalized, // Idade normalizada (com proteção contra NaN)
+            curiosity // Curiosidade (com proteção contra valores inválidos)
         ];
     }
 
     /**
      * Decide a próxima ação usando Q-Learning ou Rede Neural
      * @param {Object} conditions - Condições do ambiente
-     * @returns {string} - Ação escolhida
+     * @returns {Object} - Parâmetros de movimento e ação escolhida
      */
     decideAction(conditions) {
         // Garante que conditions seja um objeto válido
@@ -83,10 +110,222 @@ class BacteriaLearning {
         
         // Se usar rede neural, pega decisão dela
         if (this.useNeural) {
-            return this.neuralDecision(normalizedInputs);
+            const result = this.neuralDecisionContinuous(normalizedInputs, conditions);
+            // Armazena para aprendizado
+            this.lastNeuralInputs = normalizedInputs;
+            this.lastNeuralOutputs = result;
+            return result;
         } else {
             // Caso contrário, usa Q-Learning
-            return this.qLearningDecision(conditions);
+            return {
+                action: this.qLearningDecision(conditions),
+                movementParams: this.movementParams
+            };
+        }
+    }
+    
+    /**
+     * Versão contínua da decisão neural para movimentos mais naturais
+     * @param {Array} inputs - Inputs normalizados para a rede
+     * @param {Object} conditions - Condições do ambiente
+     * @returns {Object} - Parâmetros de movimento e ação
+     */
+    neuralDecisionContinuous(inputs, conditions) {
+        try {
+            // Garante que conditions seja um objeto válido
+            conditions = conditions || {};
+            
+            // Obtém as coordenadas relativas da bactéria no mundo
+            const worldWidth = typeof width !== 'undefined' ? width : 800;
+            const worldHeight = typeof height !== 'undefined' ? height : 600;
+            
+            // Protege contra valores NaN ou indefinidos na posição
+            let relX = 0.5;
+            let relY = 0.5;
+            
+            if (this.bacteria && this.bacteria.pos && 
+                typeof this.bacteria.pos.x === 'number' && !isNaN(this.bacteria.pos.x) &&
+                typeof this.bacteria.pos.y === 'number' && !isNaN(this.bacteria.pos.y)) {
+                relX = this.bacteria.pos.x / worldWidth;
+                relY = this.bacteria.pos.y / worldHeight;
+                
+                // Garante que os valores estão entre 0 e 1
+                relX = Math.max(0, Math.min(1, relX));
+                relY = Math.max(0, Math.min(1, relY));
+            }
+            
+            // Verifica se a bactéria está em um canto
+            const marginSize = 0.12; // 12% da largura/altura do mundo é considerado "perto da borda"
+            const isNearLeft = relX < marginSize;
+            const isNearRight = relX > (1 - marginSize);
+            const isNearTop = relY < marginSize;
+            const isNearBottom = relY > (1 - marginSize);
+            
+            // Considera em canto se estiver em duas bordas adjacentes
+            const isInCorner = (isNearLeft && isNearTop) || 
+                             (isNearLeft && isNearBottom) || 
+                             (isNearRight && isNearTop) || 
+                             (isNearRight && isNearBottom);
+            
+            // Detecta se está preso em um canto
+            // Mantém o estado de quando ficou presa no canto pela última vez
+            if (!this.hasOwnProperty('cornerData')) {
+                this.cornerData = {
+                    lastPosition: { x: relX, y: relY },
+                    timeInCorner: 0,
+                    lastCornerTime: 0,
+                    isStuck: false
+                };
+            }
+            
+            // Atualiza a detecção de "preso no canto"
+            if (isInCorner) {
+                // Calcula distância desde a última posição registrada
+                const movementDistance = Math.sqrt(
+                    Math.pow(relX - this.cornerData.lastPosition.x, 2) + 
+                    Math.pow(relY - this.cornerData.lastPosition.y, 2)
+                );
+                
+                // Se moveu muito pouco, aumenta o contador de tempo no canto
+                if (movementDistance < 0.01) { // 1% do tamanho do mundo é considerado "parado"
+                    this.cornerData.timeInCorner++;
+                    
+                    // Considera preso após ficar por um tempo no mesmo lugar do canto
+                    if (this.cornerData.timeInCorner > 60) { // 60 frames = ~1 segundo
+                        this.cornerData.isStuck = true;
+                        // Registra quando ficou presa para aprendizado
+                        this.cornerData.lastCornerTime = frameCount;
+                    }
+                } else {
+                    // Se moveu o suficiente, diminui o contador (mas não reseta completamente)
+                    this.cornerData.timeInCorner = Math.max(0, this.cornerData.timeInCorner - 1);
+                }
+            } else {
+                // Fora do canto, diminui progressivamente o contador
+                this.cornerData.timeInCorner = Math.max(0, this.cornerData.timeInCorner - 2);
+                // Se saiu do canto e estava preso, considera que aprendeu a sair
+                if (this.cornerData.isStuck) {
+                    this.cornerData.isStuck = false;
+                    
+                    // Aplica reforço positivo por ter saído do canto
+                    // O cérebro aprende que o comportamento que levou a sair do canto é bom
+                    if (this.lastNeuralOutputs && this.lastNeuralInputs) {
+                        console.log("Bactéria aprendeu a sair do canto!");
+                        this.brain.train(this.lastNeuralInputs, this.lastNeuralOutputs.movementParams);
+                    }
+                }
+            }
+            
+            // Atualiza a posição para a próxima comparação
+            this.cornerData.lastPosition = { x: relX, y: relY };
+            
+            // Inclui informação de canto nos inputs
+            const cornerInput = this.cornerData.isStuck ? 1 : (isInCorner ? 0.5 : 0);
+            
+            // Adiciona informação de posição e canto aos inputs
+            // Os 12 inputs completos são:
+            // 0: Saúde normalizada (0-1)
+            // 1: Energia normalizada (0-1)
+            // 2: Comida próxima (0/1)
+            // 3: Distância inversamente proporcional à comida (0-1)
+            // 4: Parceiro próximo (0/1)
+            // 5: Distância inversamente proporcional ao parceiro (0-1)
+            // 6: Predador próximo (0/1)
+            // 7: Amigos próximos (0/1)
+            // 8: Idade normalizada (0-1)
+            // 9: Curiosidade (0-1)
+            // 10: Posição relativa X (0-1)
+            // 11: Posição relativa Y (0-1)
+            
+            // Substitui o último input (curiosidade) por cornerInput quando a bactéria está presa
+            // para manter apenas 12 inputs no total
+            if (this.cornerData.isStuck) {
+                inputs[9] = cornerInput; // Substitui curiosidade por cornerInput quando presa
+            }
+            
+            const positionInputs = [...inputs, relX, relY];
+            
+            // Obtém as saídas contínuas da rede neural
+            const outputs = this.brain.predict(positionInputs);
+            
+            // Os 5 outputs agora representam:
+            // 0: Direção (0-1, escalado para 0-360 graus)
+            // 1: Velocidade (0-1)
+            // 2: Intensidade de wandering (0-1)
+            // 3: Intensidade de noise (0-1)
+            // 4: Peso do alvo (0-1)
+            
+            // Converte a direção para graus
+            const direction = outputs[0] * TWO_PI;
+            
+            // Calcula a proximidade da borda (0 na borda, 1 no centro)
+            const borderProximity = Math.min(relX, 1-relX, relY, 1-relY) * 4;
+            
+            // Ajusta parâmetros para situações de canto
+            let wanderStrength, noiseStrength, explorationSpeed;
+            
+            if (this.cornerData.isStuck) {
+                // Se estiver presa no canto, aumenta drasticamente a aleatoriedade e velocidade
+                wanderStrength = Math.max(0.8, outputs[2]); // Mínimo de 0.8
+                noiseStrength = Math.max(0.6, outputs[3]); // Mínimo de 0.6
+                explorationSpeed = Math.max(0.7, outputs[1]); // Mínimo de 0.7
+            } else {
+                // Comportamento normal, ajustado pela proximidade da borda
+                wanderStrength = outputs[2] * (1 + (1-borderProximity) * 0.3);
+                noiseStrength = outputs[3] * (1 + (1-borderProximity) * 0.2);
+                
+                // Aumenta a velocidade para explorar mais se estiver em áreas sem alvos
+                explorationSpeed = !conditions.foodNearby && !conditions.mateNearby 
+                    ? outputs[1] * 1.1 // Aumento moderado para exploração
+                    : outputs[1];
+            }
+            
+            // Atualiza os parâmetros de movimento
+            this.movementParams = {
+                direction: direction,
+                speed: explorationSpeed,
+                wanderStrength: wanderStrength,
+                noiseStrength: noiseStrength,
+                targetWeight: outputs[4],
+                isStuck: this.cornerData.isStuck // Indica se está presa para o sistema de movimento
+            };
+            
+            // Determina a ação principal com base nos parâmetros
+            let action;
+            
+            // Regras para decidir a ação
+            if (this.cornerData.isStuck) {
+                // Se estiver presa, prioriza exploração para sair do canto
+                action = 'explore';
+            } else if (outputs[1] < 0.2) { // Velocidade muito baixa
+                action = 'rest';
+            } else if (outputs[4] > 0.7 && conditions.foodNearby) { // Alto peso de alvo e comida próxima
+                action = 'seekFood';
+            } else if (outputs[4] > 0.7 && conditions.mateNearby) { // Alto peso de alvo e parceiro próximo
+                action = 'seekMate';
+            } else {
+                // Permite explorar cantos, mas com menor probabilidade
+                action = 'explore';
+            }
+            
+            return {
+                action: action,
+                movementParams: this.movementParams
+            };
+        } catch (error) {
+            console.error("Erro na decisão neural contínua:", error);
+            // Retorna valores padrão em caso de erro
+            return {
+                action: 'explore',
+                movementParams: {
+                    direction: random(TWO_PI),
+                    speed: 0.5,
+                    wanderStrength: 0.3,
+                    noiseStrength: 0.2,
+                    targetWeight: 0.5,
+                    isStuck: false
+                }
+            };
         }
     }
 
@@ -167,56 +406,39 @@ class BacteriaLearning {
     }
 
     /**
-     * Implementa decisão por rede neural
-     * @param {Array} inputs - Inputs normalizados
-     * @returns {string} - Ação escolhida
+     * Aplica recompensa para o aprendizado
+     * @param {number} reward - Valor da recompensa
      */
-    neuralDecision(inputs) {
-        // Se não tiver inputs válidos, retorna ação padrão
-        if (!inputs || !Array.isArray(inputs)) {
-            return 'explore';
+    applyReward(reward) {
+        // Atualiza o Q-Learning se foi a última decisão
+        if (!this.useNeural && this.qLearning.lastState && this.qLearning.lastAction) {
+            this.updateQTable(this.qLearning.lastState, this.qLearning.lastAction, reward);
         }
         
-        // Usa a rede neural para prever a ação
-        const outputs = this.brain.predict(inputs);
-        
-        // Armazena para treinamento futuro
-        this.lastNeuralInputs = [...inputs];
-        this.lastNeuralOutputs = [...outputs];
-        
-        // Encontra o índice da maior saída
-        let maxIndex = 0;
-        for (let i = 1; i < outputs.length; i++) {
-            if (outputs[i] > outputs[maxIndex]) {
-                maxIndex = i;
+        // Atualiza a rede neural se foi a última decisão
+        if (this.useNeural && this.lastNeuralInputs && this.lastNeuralOutputs) {
+            // Ajusta os pesos com base na recompensa
+            // Para simplificar, apenas reforçamos os outputs atuais quando a recompensa é positiva
+            if (reward > 0) {
+                this.brain.train(this.lastNeuralInputs, this.lastNeuralOutputs.movementParams);
             }
         }
-        
-        // Mapeia o índice para a ação correspondente
-        const action = this.qLearning.actions[
-            maxIndex % this.qLearning.actions.length
-        ];
-        
-        return action;
     }
 
     /**
-     * Atualiza a tabela Q com uma recompensa
-     * @param {Object} conditions - Condições do ambiente
+     * Atualiza a tabela Q com base na recompensa recebida
+     * @param {Object} state - Estado anterior
      * @param {string} action - Ação tomada
      * @param {number} reward - Recompensa recebida
-     * @param {Object} newConditions - Novas condições após a ação
      */
-    updateQTable(conditions, action, reward, newConditions) {
-        if (!conditions || !action) return;
+    updateQTable(state, action, reward) {
+        if (!state || !action) return;
         
         // Garante que as condições são objetos válidos
-        conditions = conditions || {};
-        newConditions = newConditions || {};
+        state = state || {};
         
         // Obtém a energia atual (com fallback seguro)
         let currentEnergy = 50; // Valor padrão
-        let newEnergy = 50; // Valor padrão
         
         try {
             // Tenta obter energia atual do stateManager (nova implementação)
@@ -235,17 +457,9 @@ class BacteriaLearning {
         const stateKey = JSON.stringify({
             health: Math.floor(this.bacteria.health / 10) * 10,
             energy: Math.floor(currentEnergy / 10) * 10,
-            foodNearby: conditions.foodNearby || false,
-            mateNearby: conditions.mateNearby || false,
-            predatorNearby: conditions.predatorNearby || false
-        });
-        
-        const newStateKey = JSON.stringify({
-            health: Math.floor(this.bacteria.health / 10) * 10,
-            energy: Math.floor(currentEnergy / 10) * 10, // Usamos mesma energia, pois já foi atualizada
-            foodNearby: newConditions.foodNearby || false,
-            mateNearby: newConditions.mateNearby || false,
-            predatorNearby: newConditions.predatorNearby || false
+            foodNearby: state.foodNearby || false,
+            mateNearby: state.mateNearby || false,
+            predatorNearby: state.predatorNearby || false
         });
         
         // Inicializa valores na tabela Q se necessário
@@ -256,29 +470,29 @@ class BacteriaLearning {
             }
         }
         
-        if (!this.qLearning.qTable[newStateKey]) {
-            this.qLearning.qTable[newStateKey] = {};
-            for (const a of this.qLearning.actions) {
-                this.qLearning.qTable[newStateKey][a] = 0;
-            }
-        }
-        
-        // Encontra o maior valor Q para o novo estado
-        let maxQ = -Infinity;
-        for (const a of this.qLearning.actions) {
-            const q = this.qLearning.qTable[newStateKey][a] || 0;
-            if (q > maxQ) {
-                maxQ = q;
-            }
-        }
-        
         // Atualiza valor Q para o estado e ação atual usando a equação de Bellman
         const oldQ = this.qLearning.qTable[stateKey][action] || 0;
         const newQ = oldQ + this.qLearning.learningRate * (
-            reward + this.qLearning.discountFactor * maxQ - oldQ
+            reward + this.qLearning.discountFactor * oldQ - oldQ
         );
         
         this.qLearning.qTable[stateKey][action] = newQ;
+    }
+
+    /**
+     * Decisão neural padrão (para compatibilidade com código existente)
+     * @param {Array} inputs - Inputs normalizados 
+     * @returns {string} - Ação escolhida
+     */
+    neuralDecision(inputs) {
+        try {
+            // Chama a versão contínua e retorna apenas a ação
+            const result = this.neuralDecisionContinuous(inputs);
+            return result.action;
+        } catch (error) {
+            console.error("Erro na decisão neural:", error);
+            return 'explore'; // Valor padrão em caso de erro
+        }
     }
 
     /**

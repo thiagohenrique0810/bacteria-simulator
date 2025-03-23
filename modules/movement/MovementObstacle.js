@@ -34,10 +34,19 @@ class MovementObstacle {
             return false;
         }
         
+        // Aumenta o alcance de detecção e a força de repulsão para detecção precoce
+        const lookAheadDist = this.lookAhead * (1 + size/20); // Ajusta baseado no tamanho da bactéria
+        
         // Vetor na direção do movimento
         const ahead = createVector(
-            this.base.position.x + this.base.velocity.x * this.lookAhead,
-            this.base.position.y + this.base.velocity.y * this.lookAhead
+            this.base.position.x + this.base.velocity.x * lookAheadDist,
+            this.base.position.y + this.base.velocity.y * lookAheadDist
+        );
+        
+        // Cria um segundo ponto de verificação para melhorar a detecção
+        const aheadHalf = createVector(
+            this.base.position.x + this.base.velocity.x * lookAheadDist * 0.5,
+            this.base.position.y + this.base.velocity.y * lookAheadDist * 0.5
         );
 
         // Ponto mais próximo
@@ -51,8 +60,11 @@ class MovementObstacle {
                 continue;
             }
 
-            // Verifica colisão com o ponto à frente
-            if (obstacle.collidesWith(ahead, size/2)) {
+            // Verifica colisão com o ponto à frente (principal ou secundário)
+            const collisionAhead = obstacle.collidesWith(ahead, size/1.5);
+            const collisionAheadHalf = obstacle.collidesWith(aheadHalf, size/1.5);
+            
+            if (collisionAhead || collisionAheadHalf) {
                 // Calcula distância até o obstáculo
                 const obstacleCenter = createVector(
                     obstacle.x + obstacle.w/2,
@@ -77,8 +89,19 @@ class MovementObstacle {
             // Calcula vetor de fuga
             const escape = p5.Vector.sub(this.base.position, obstacleCenter);
             escape.normalize();
-            escape.mult(this.avoidForce);
+            
+            // Ajusta a força de escape baseado na proximidade
+            const distanceFactor = Math.max(0.5, Math.min(3.0, 3 * (1 - nearestDistance / (lookAheadDist * 2))));
+            escape.mult(this.avoidForce * distanceFactor * 2.5);
+            
+            // Aplica a força de fuga
             this.base.applyForce(escape);
+            
+            // Se estiver muito próximo, reduz a velocidade
+            if (nearestDistance < size * 2) {
+                this.base.velocity.mult(0.8);
+            }
+            
             return true;
         }
         

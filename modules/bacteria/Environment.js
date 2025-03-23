@@ -12,6 +12,14 @@ class BacteriaEnvironment {
         // Adiciona controle de tempo para detecção de parceiros
         this.lastMateDetectionTime = 0;
         this.mateDetectionCooldown = 120; // 2 segundos em 60fps
+        
+        // Rastreia as bactérias e obstáculos identificados recentemente
+        this.recentlyIdentifiedBacteria = new Map();
+        this.recentlyIdentifiedObstacles = new Map();
+        
+        // Propriedades para rastreamento de bactérias e obstáculos
+        this.identificationRange = this.bacteria?.perceptionRadius || 150; 
+        this.identificationMemoryTime = 300; // Frames que a bactéria se lembra de outra entidade
     }
 
     /**
@@ -33,7 +41,12 @@ class BacteriaEnvironment {
             foodTarget: null,
             predatorTarget: null,
             obstacleNearby: false,
-            obstacles: []
+            obstacles: [],
+            // Novas propriedades para bactérias e obstáculos identificados
+            nearbyBacteria: [],
+            sameSpeciesBacteria: [],
+            differentSpeciesBacteria: [],
+            identifiedObstacles: []
         };
 
         // Tenta obter os dados da simulação se não foram fornecidos
@@ -101,6 +114,12 @@ class BacteriaEnvironment {
                 }
             }
         }
+
+        // Identifica e processa outras bactérias próximas
+        this.identifyNearbyBacteria(entities, conditions);
+        
+        // Identifica e processa obstáculos no ambiente
+        this.identifyObstacles(obstacles, conditions);
 
         // Verifica bactérias compatíveis para reprodução (com cooldown)
         const currentTime = frameCount;
@@ -178,6 +197,224 @@ class BacteriaEnvironment {
         }
 
         return conditions;
+    }
+
+    /**
+     * Identifica e classifica bactérias próximas
+     * @param {Array} entities - Array de todas as entidades
+     * @param {Object} conditions - Condições do ambiente a serem atualizadas
+     */
+    identifyNearbyBacteria(entities, conditions) {
+        if (!Array.isArray(entities) || !this.bacteria || !this.bacteria.pos) return;
+        
+        const currentFrame = frameCount;
+        const nearbyBacteria = [];
+        const sameSpeciesBacteria = [];
+        const differentSpeciesBacteria = [];
+        
+        // Limpa entradas antigas do mapa de identificação
+        for (const [id, data] of this.recentlyIdentifiedBacteria.entries()) {
+            if (currentFrame - data.lastSeen > this.identificationMemoryTime) {
+                this.recentlyIdentifiedBacteria.delete(id);
+            }
+        }
+        
+        // Filtra apenas bactérias válidas
+        const validEntities = entities.filter(e => 
+            e && e instanceof Bacteria && e !== this.bacteria && e.pos
+        );
+        
+        for (const other of validEntities) {
+            try {
+                const d = dist(this.bacteria.pos.x, this.bacteria.pos.y, other.pos.x, other.pos.y);
+                
+                // Verifica se está no raio de identificação
+                if (d <= this.identificationRange) {
+                    // Adiciona à lista de bactérias próximas
+                    nearbyBacteria.push(other);
+                    
+                    // Compara espécie/tipo de bactéria
+                    const isSameSpecies = this.isSameSpecies(other);
+                    
+                    // Classifica por espécie
+                    if (isSameSpecies) {
+                        sameSpeciesBacteria.push(other);
+                    } else {
+                        differentSpeciesBacteria.push(other);
+                    }
+                    
+                    // Atualiza o mapa de bactérias identificadas
+                    this.recentlyIdentifiedBacteria.set(other.id, {
+                        bacteria: other,
+                        lastSeen: currentFrame,
+                        isSameSpecies: isSameSpecies,
+                        distance: d,
+                        position: other.pos.copy()
+                    });
+                }
+            } catch (error) {
+                console.warn("Erro ao identificar bactéria:", error);
+            }
+        }
+        
+        // Atualiza as condições
+        conditions.nearbyBacteria = nearbyBacteria;
+        conditions.sameSpeciesBacteria = sameSpeciesBacteria;
+        conditions.differentSpeciesBacteria = differentSpeciesBacteria;
+        
+        // Para depuração
+        if (this.bacteria && this.bacteria.age % 300 === 0 && nearbyBacteria.length > 0) {
+            console.log(`Bactéria ${this.bacteria.id} identificou ${nearbyBacteria.length} bactérias próximas (${sameSpeciesBacteria.length} mesma espécie, ${differentSpeciesBacteria.length} espécie diferente)`);
+        }
+    }
+    
+    /**
+     * Identifica e processa obstáculos no ambiente
+     * @param {Array} obstacles - Array de obstáculos
+     * @param {Object} conditions - Condições do ambiente a serem atualizadas
+     */
+    identifyObstacles(obstacles, conditions) {
+        if (!Array.isArray(obstacles) || !this.bacteria || !this.bacteria.pos) return;
+        
+        const currentFrame = frameCount;
+        const identifiedObstacles = [];
+        
+        // Limpa entradas antigas do mapa de obstáculos
+        for (const [id, data] of this.recentlyIdentifiedObstacles.entries()) {
+            if (currentFrame - data.lastSeen > this.identificationMemoryTime) {
+                this.recentlyIdentifiedObstacles.delete(id);
+            }
+        }
+        
+        // Processa cada obstáculo
+        for (let i = 0; i < obstacles.length; i++) {
+            const obstacle = obstacles[i];
+            if (!obstacle) continue;
+            
+            try {
+                // Gera um ID para o obstáculo se não tiver
+                const obstacleId = obstacle.id || `obstacle_${i}`;
+                
+                // Verifica se o obstáculo está próximo usando o método collidesWith quando disponível
+                let isNearby = false;
+                let distance = Infinity;
+                let obstaclePosition;
+                
+                if (typeof obstacle.collidesWith === 'function') {
+                    // Usa uma margem maior para detecção
+                    const detectionMargin = this.bacteria.size * 3;
+                    isNearby = obstacle.collidesWith(this.bacteria.pos, detectionMargin);
+                    
+                    // Tenta obter o centro do obstáculo para calcular a distância
+                    if (obstacle.center) {
+                        obstaclePosition = obstacle.center;
+                        distance = dist(this.bacteria.pos.x, this.bacteria.pos.y, obstacle.center.x, obstacle.center.y);
+                    } else if (obstacle.position) {
+                        obstaclePosition = obstacle.position;
+                        distance = dist(this.bacteria.pos.x, this.bacteria.pos.y, obstacle.position.x, obstacle.position.y);
+                    } else if (obstacle.x !== undefined && obstacle.y !== undefined) {
+                        obstaclePosition = createVector(obstacle.x, obstacle.y);
+                        distance = dist(this.bacteria.pos.x, this.bacteria.pos.y, obstacle.x, obstacle.y);
+                    }
+                } else if (obstacle.position) {
+                    obstaclePosition = obstacle.position;
+                    distance = dist(this.bacteria.pos.x, this.bacteria.pos.y, obstacle.position.x, obstacle.position.y);
+                    isNearby = distance < this.identificationRange;
+                } else if (obstacle.x !== undefined && obstacle.y !== undefined) {
+                    obstaclePosition = createVector(obstacle.x, obstacle.y);
+                    distance = dist(this.bacteria.pos.x, this.bacteria.pos.y, obstacle.x, obstacle.y);
+                    isNearby = distance < this.identificationRange;
+                }
+                
+                // Se o obstáculo estiver próximo, adiciona à lista
+                if (isNearby) {
+                    identifiedObstacles.push(obstacle);
+                    conditions.obstacleNearby = true;
+                    
+                    // Atualiza o mapa de obstáculos identificados
+                    this.recentlyIdentifiedObstacles.set(obstacleId, {
+                        obstacle: obstacle,
+                        lastSeen: currentFrame,
+                        distance: distance,
+                        position: obstaclePosition
+                    });
+                }
+            } catch (error) {
+                console.warn("Erro ao identificar obstáculo:", error);
+            }
+        }
+        
+        // Atualiza as condições
+        conditions.identifiedObstacles = identifiedObstacles;
+        
+        // Para depuração
+        if (this.bacteria && this.bacteria.age % 300 === 0 && identifiedObstacles.length > 0) {
+            console.log(`Bactéria ${this.bacteria.id} identificou ${identifiedObstacles.length} obstáculos próximos`);
+        }
+    }
+    
+    /**
+     * Verifica se outra bactéria é da mesma espécie
+     * @param {Bacteria} otherBacteria - Bactéria a ser comparada
+     * @returns {boolean} - Verdadeiro se for da mesma espécie
+     */
+    isSameSpecies(otherBacteria) {
+        if (!otherBacteria) return false;
+        
+        try {
+            // Compara propriedades que indicam espécie/tipo
+            
+            // Se ambas têm a propriedade species, compara diretamente
+            if (this.bacteria.species !== undefined && otherBacteria.species !== undefined) {
+                return this.bacteria.species === otherBacteria.species;
+            }
+            
+            // Se ambas têm a propriedade type, compara
+            if (this.bacteria.type !== undefined && otherBacteria.type !== undefined) {
+                return this.bacteria.type === otherBacteria.type;
+            }
+            
+            // Compara pelo DNA se ambas têm DNA
+            if (this.bacteria.dna && otherBacteria.dna) {
+                // Verifica compatibilidade genética básica
+                // Se os genes têm similaridade > 80%, considera mesma espécie
+                if (this.bacteria.dna.genes && otherBacteria.dna.genes) {
+                    let similarity = 0;
+                    let totalGenes = 0;
+                    
+                    // Compara genes comuns
+                    for (const gene in this.bacteria.dna.genes) {
+                        if (otherBacteria.dna.genes[gene] !== undefined) {
+                            const diff = Math.abs(this.bacteria.dna.genes[gene] - otherBacteria.dna.genes[gene]);
+                            similarity += (1 - diff);
+                            totalGenes++;
+                        }
+                    }
+                    
+                    // Calcula porcentagem de similaridade
+                    return totalGenes > 0 ? (similarity / totalGenes) > 0.8 : false;
+                }
+            }
+            
+            // Se nenhuma das comparações anteriores funcionou, usa a aparência visual
+            // Considera mesma espécie se tem a mesma cor (ou similar)
+            if (this.bacteria.color && otherBacteria.color) {
+                // Compara componentes RGB
+                const colorDiff = Math.abs(red(this.bacteria.color) - red(otherBacteria.color)) +
+                                 Math.abs(green(this.bacteria.color) - green(otherBacteria.color)) +
+                                 Math.abs(blue(this.bacteria.color) - blue(otherBacteria.color));
+                                 
+                // Se a diferença for pequena, considera mesma espécie
+                return colorDiff < 100;
+            }
+            
+            // Se não tem como comparar, assume que não é da mesma espécie
+            return false;
+            
+        } catch (error) {
+            console.warn("Erro ao comparar espécies:", error);
+            return false;
+        }
     }
 
     /**

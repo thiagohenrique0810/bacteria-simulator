@@ -62,28 +62,64 @@ class InteractionSystem {
         // Interações bactéria-bactéria (reprodução)
         for (let i = 0; i < entityManager.bacteria.length; i++) {
             const bacteria = entityManager.bacteria[i];
-            if (!bacteria.reproduction || !bacteria.reproduction.canMateNow()) continue;
             
-            // Usa o grid para verificar apenas bactérias próximas
-            const nearbyEntities = spatialGrid.queryRadius(bacteria.pos, 50);
-            const nearbyBacteria = nearbyEntities.filter(e => 
-                e instanceof Bacteria && e !== bacteria
-            );
+            // Verificações de segurança para bactéria e sistema de reprodução
+            if (!bacteria || !bacteria.pos || !bacteria.reproduction) {
+                continue;
+            }
             
-            for (let otherBacteria of nearbyBacteria) {
-                if (!otherBacteria.reproduction) continue;
+            // Verifica se pode se reproduzir
+            if (!bacteria.reproduction.canMateNow()) {
+                continue;
+            }
+            
+            try {
+                // Log de depuração para verificar tentativas de reprodução
+                if (frameCount % 300 === 0) {
+                    console.log(`Bactéria ${bacteria.id || i} está procurando parceiro para reprodução`);
+                }
                 
-                const d = dist(bacteria.pos.x, bacteria.pos.y, otherBacteria.pos.x, otherBacteria.pos.y);
-                if (d < bacteria.size + otherBacteria.size) {
-                    stats.matingAttempts++;
+                // Usa o grid para verificar apenas bactérias próximas
+                let nearbyBacteria = [];
+                if (spatialGrid) {
+                    const nearbyEntities = spatialGrid.queryRadius(bacteria.pos, 50);
+                    nearbyBacteria = nearbyEntities.filter(e => 
+                        e instanceof Bacteria && e !== bacteria && e.pos && e.reproduction
+                    );
+                } else {
+                    // Fallback caso o grid espacial não esteja disponível
+                    nearbyBacteria = entityManager.bacteria.filter(b => 
+                        b !== bacteria && b.pos && b.reproduction && 
+                        dist(bacteria.pos.x, bacteria.pos.y, b.pos.x, b.pos.y) < 50
+                    );
+                }
+                
+                // Log de depuração para verificar bactérias próximas
+                if (nearbyBacteria.length > 0 && frameCount % 300 === 0) {
+                    console.log(`Bactéria ${bacteria.id || i} encontrou ${nearbyBacteria.length} parceiros potenciais`);
+                }
+                
+                for (let otherBacteria of nearbyBacteria) {
+                    // Verificações adicionais de segurança
+                    if (!otherBacteria.reproduction || !otherBacteria.reproduction.canMateNow()) {
+                        continue;
+                    }
                     
-                    // Tenta acasalar
-                    const success = bacteria.reproduction.mate(otherBacteria.reproduction);
-                    if (success) {
-                        stats.successfulMatings++;
-                        break; // Apenas um acasalamento por frame
+                    const d = dist(bacteria.pos.x, bacteria.pos.y, otherBacteria.pos.x, otherBacteria.pos.y);
+                    if (d < bacteria.size + otherBacteria.size + 5) {
+                        stats.matingAttempts++;
+                        
+                        // Tenta acasalar e registra o sucesso
+                        const success = bacteria.reproduction.mate(otherBacteria.reproduction);
+                        if (success) {
+                            stats.successfulMatings++;
+                            console.log(`Reprodução bem-sucedida entre bactérias ${bacteria.id || i} e ${otherBacteria.id || 'desconhecida'}`);
+                            break; // Apenas um acasalamento por frame
+                        }
                     }
                 }
+            } catch (error) {
+                console.error(`Erro durante a verificação de reprodução para bactéria ${bacteria.id || i}:`, error);
             }
         }
         

@@ -9,7 +9,7 @@ class NeuralNetwork {
      * @param {number} hiddenSize - Tamanho da camada oculta
      * @param {number} outputSize - Tamanho da camada de saída
      */
-    constructor(inputSize = 10, hiddenSize = 8, outputSize = 4) {
+    constructor(inputSize = 12, hiddenSize = 12, outputSize = 5) {
         this.inputSize = inputSize;
         this.hiddenSize = hiddenSize;
         this.outputSize = outputSize;
@@ -71,16 +71,33 @@ class NeuralNetwork {
      */
     predict(inputs) {
         // Verificação de segurança para inputs
-        if (!inputs || !Array.isArray(inputs) || inputs.length !== this.inputSize) {
-            console.warn('Neural network received invalid inputs:', inputs);
+        if (!inputs || !Array.isArray(inputs)) {
+            console.warn('Neural network received null or non-array inputs:', inputs);
             // Retorna um array de saída com valores padrão
             return Array(this.outputSize).fill(0.5);
+        }
+        
+        // Adapta o tamanho dos inputs se necessário
+        let processedInputs = [...inputs];
+        if (inputs.length !== this.inputSize) {
+            console.warn(`Neural network expected ${this.inputSize} inputs but received ${inputs.length}:`, inputs);
+            
+            // Se recebeu menos inputs que o esperado, preenche com valores padrão (0.5)
+            if (inputs.length < this.inputSize) {
+                processedInputs = [...inputs, ...Array(this.inputSize - inputs.length).fill(0.5)];
+            } 
+            // Se recebeu mais inputs que o esperado, trunca para o tamanho esperado
+            else {
+                processedInputs = inputs.slice(0, this.inputSize);
+            }
+            
+            console.log('Adjusted inputs to match network size:', processedInputs);
         }
         
         try {
             // Camada oculta
             let hidden = this.weightsIH.map((row, i) => 
-                this.activate(row.reduce((sum, weight, j) => sum + weight * inputs[j], 0) + this.biasH[i][0])
+                this.activate(row.reduce((sum, weight, j) => sum + weight * processedInputs[j], 0) + this.biasH[i][0])
             );
 
             // Camada de saída

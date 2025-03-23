@@ -137,6 +137,170 @@ class SimulationVisualization {
         this.simulation = simulation;
         this.trails = [];
         this.maxTrails = 100;
+        this.showStats = true;
+        this.showGenes = false;
+        this.showGrid = false;
+        
+        // Configurações de estatísticas
+        this.statsGraphs = {
+            population: {
+                data: [],
+                maxPoints: 100,
+                color: color(0, 200, 0),
+                visible: true,
+                min: 0,
+                max: 100,
+                title: 'População'
+            },
+            predators: {
+                data: [],
+                maxPoints: 100,
+                color: color(200, 0, 0),
+                visible: true,
+                min: 0,
+                max: 10,
+                title: 'Predadores'
+            },
+            food: {
+                data: [],
+                maxPoints: 100,
+                color: color(0, 0, 200),
+                visible: true,
+                min: 0,
+                max: 200,
+                title: 'Comida'
+            },
+            avgHealth: {
+                data: [],
+                maxPoints: 100,
+                color: color(200, 100, 0),
+                visible: true,
+                min: 0,
+                max: 100,
+                title: 'Saúde Média'
+            },
+            generation: {
+                data: [],
+                maxPoints: 100,
+                color: color(150, 0, 150),
+                visible: true,
+                min: 1,
+                max: 10,
+                title: 'Geração'
+            }
+        };
+        
+        // Atualiza estatísticas a cada segundo
+        this.lastStatUpdate = 0;
+        this.statUpdateInterval = 60; // frames (1 segundo em 60fps)
+    }
+
+    /**
+     * Atualiza os dados dos gráficos
+     */
+    updateGraphs() {
+        // Atualiza somente a cada intervalo definido
+        if (frameCount - this.lastStatUpdate < this.statUpdateInterval) {
+            return;
+        }
+        
+        this.lastStatUpdate = frameCount;
+        
+        // Adiciona dados atuais aos gráficos
+        this.statsGraphs.population.data.push(this.simulation.bacteria.length);
+        this.statsGraphs.predators.data.push(this.simulation.predators.length);
+        this.statsGraphs.food.data.push(this.simulation.food.length);
+        
+        // Calcula saúde média
+        let totalHealth = 0;
+        for (let bacteria of this.simulation.bacteria) {
+            totalHealth += bacteria.health;
+        }
+        const avgHealth = this.simulation.bacteria.length > 0 ? 
+            totalHealth / this.simulation.bacteria.length : 0;
+        this.statsGraphs.avgHealth.data.push(avgHealth);
+        
+        // Calcula geração média
+        let totalGeneration = 0;
+        for (let bacteria of this.simulation.bacteria) {
+            totalGeneration += bacteria.dna.generation;
+        }
+        const avgGeneration = this.simulation.bacteria.length > 0 ? 
+            totalGeneration / this.simulation.bacteria.length : 1;
+        this.statsGraphs.generation.data.push(avgGeneration);
+        
+        // Limita o número de pontos
+        for (let key in this.statsGraphs) {
+            const graph = this.statsGraphs[key];
+            if (graph.data.length > graph.maxPoints) {
+                graph.data.shift();
+            }
+            
+            // Atualiza min/max dinâmicos
+            if (graph.data.length > 0) {
+                const maxValue = Math.max(...graph.data);
+                graph.max = Math.max(graph.max, Math.ceil(maxValue * 1.2));
+            }
+        }
+    }
+
+    /**
+     * Desenha os gráficos de estatísticas
+     */
+    drawGraphs() {
+        const graphWidth = 220;
+        const graphHeight = 80;
+        const margin = 10;
+        const statsX = width - graphWidth - margin;
+        
+        // Atualiza os gráficos
+        this.updateGraphs();
+        
+        // Verifica se há dados suficientes
+        if (this.statsGraphs.population.data.length < 2) return;
+        
+        let yOffset = 50;
+        
+        // Desenha cada gráfico
+        for (let key in this.statsGraphs) {
+            const graph = this.statsGraphs[key];
+            if (!graph.visible) continue;
+            
+            // Desenha fundo do gráfico
+            fill(0, 0, 0, 150);
+            stroke(150);
+            rect(statsX, yOffset, graphWidth, graphHeight);
+            
+            // Desenha título
+            noStroke();
+            fill(255);
+            textAlign(LEFT, TOP);
+            textSize(12);
+            text(graph.title, statsX + 5, yOffset + 2);
+            
+            // Desenha valor atual
+            const currentValue = graph.data[graph.data.length - 1];
+            textAlign(RIGHT, TOP);
+            text(Math.round(currentValue), statsX + graphWidth - 5, yOffset + 2);
+            
+            // Desenha o gráfico
+            stroke(graph.color);
+            noFill();
+            beginShape();
+            for (let i = 0; i < graph.data.length; i++) {
+                const x = map(i, 0, graph.maxPoints, statsX, statsX + graphWidth);
+                const y = map(graph.data[i], graph.min, graph.max, 
+                             yOffset + graphHeight - 5, yOffset + 15);
+                vertex(x, y);
+            }
+            endShape();
+            
+            // Desenha linhas guia
+            stroke(150, 50);
+            line(statsX, yOffset + graphHeight/2, statsX + graphWidth, yOffset + graphHeight/2);
+            
+            yOffset += graphHeight + margin;
+        }
     }
 
     /**
@@ -162,6 +326,14 @@ class SimulationVisualization {
         this.drawObstacles();
         this.drawFood();
         this.drawBacteria();
+
+        // Desenha visualização do particionamento espacial
+        if (this.showGrid && this.simulation.spatialGrid) {
+            this.drawSpatialGrid();
+        }
+        
+        // Desenha os gráficos de estatísticas
+        this.drawGraphs();
 
         pop();
     }
@@ -319,56 +491,35 @@ class SimulationVisualization {
         text(`Saúde Média: ${(stats.averageHealth || 0).toFixed(1)}`, x, y); y += lineHeight;
         text(`Comida Disponível: ${this.simulation.food?.length || 0}`, x, y); y += lineHeight;
         text(`Obstáculos: ${this.simulation.obstacles?.length || 0}`, x, y);
+
+        // Adiciona informações sobre o sistema de grid e ciclo dia/noite
+        if (this.simulation.dayNightEnabled) {
+            textAlign(LEFT, TOP);
+            textSize(14);
+            fill(this.simulation.dayTime ? color(255, 200, 0) : color(100, 100, 255));
+            text(`Estado: ${this.simulation.dayTime ? 'Dia' : 'Noite'}`, 
+                 width - 150, height - 40);
+        }
     }
 
     /**
-     * Desenha as estatísticas
+     * Desenha o grid espacial
      */
-    drawStats() {
-        push();
-        fill(255);
-        noStroke();
-        textAlign(LEFT);
-        textSize(14);
-
-        let y = 30;
-        const lineHeight = 20;
-
-        // População
-        text(`População Total: ${this.simulation.stats.totalBacteria}`, 10, y);
-        y += lineHeight;
-        text(`Fêmeas: ${this.simulation.stats.femaleBacterias}`, 10, y);
-        y += lineHeight;
-        text(`Machos: ${this.simulation.stats.maleBacterias}`, 10, y);
-        y += lineHeight;
-
-        // Saúde e Energia
-        text(`Saúde Média: ${this.simulation.stats.averageHealth.toFixed(1)}`, 10, y);
-        y += lineHeight;
-        text(`Famintos: ${this.simulation.stats.hungryBacterias}`, 10, y);
-        y += lineHeight;
-        text(`Descansando: ${this.simulation.stats.restingBacterias}`, 10, y);
-        y += lineHeight;
-
-        // Reprodução
-        text(`Grávidas: ${this.simulation.stats.pregnantBacterias}`, 10, y);
-        y += lineHeight;
-        text(`Geração: ${this.simulation.stats.highestGeneration}`, 10, y);
-        y += lineHeight;
-        text(`Nascimentos: ${this.simulation.stats.naturalBirths}`, 10, y);
-        y += lineHeight;
-
-        // Estatísticas do Q-Learning
-        y += lineHeight; // Espaço extra
-        text("Aprendizado por Reforço:", 10, y);
-        y += lineHeight;
-        text(`Recompensa Média: ${this.simulation.stats.averageReward.toFixed(2)}`, 10, y);
-        y += lineHeight;
-        text(`Taxa de Exploração: ${(this.simulation.stats.explorationRate * 100).toFixed(1)}%`, 10, y);
-        y += lineHeight;
-        text(`Progresso: ${this.simulation.stats.learningProgress.toFixed(2)}`, 10, y);
-
-        pop();
+    drawSpatialGrid() {
+        const grid = this.simulation.spatialGrid;
+        stroke(100, 100, 255, 30);
+        
+        // Desenha linhas verticais
+        for (let x = 0; x <= grid.cols; x++) {
+            const xPos = x * grid.cellSize;
+            line(xPos, 0, xPos, this.simulation.height);
+        }
+        
+        // Desenha linhas horizontais
+        for (let y = 0; y <= grid.rows; y++) {
+            const yPos = y * grid.cellSize;
+            line(0, yPos, this.simulation.width, yPos);
+        }
     }
 }
 

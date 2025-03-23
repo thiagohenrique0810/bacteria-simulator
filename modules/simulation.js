@@ -26,6 +26,15 @@ class Simulation {
         this.foodRate = 0.8;
         this.foodSpawnInterval = 3;
         this.foodSpawnAmount = 8;
+        
+        // Sistema de particionamento espacial
+        this.spatialGrid = new SpatialGrid(this.width, this.height, 50); // Células de 50px
+        
+        // Flag para indicar ciclo dia/noite
+        this.dayNightEnabled = true;
+        this.dayTime = true; // True = dia, False = noite
+        this.dayLength = 3600; // Frames por ciclo (1min em 60fps)
+        this.currentTime = 0;
 
         // Entidades
         this.bacteria = [];
@@ -96,19 +105,30 @@ class Simulation {
             this.controlsContainer = createDiv();
             this.controlsContainer.id('predator-controls-container');
             this.controlsContainer.style('position', 'fixed');
-            this.controlsContainer.style('bottom', '0');
-            this.controlsContainer.style('left', '0');
-            this.controlsContainer.style('width', '50%');
-            this.controlsContainer.style('background-color', 'rgba(248, 249, 250, 0.95)');
-            this.controlsContainer.style('padding', '15px');
-            this.controlsContainer.style('border-top', '1px solid rgba(0,0,0,0.1)');
-            this.controlsContainer.style('box-shadow', '0 -2px 10px rgba(0,0,0,0.1)');
-            this.controlsContainer.style('max-height', '200px');
+            this.controlsContainer.style('top', '0');
+            this.controlsContainer.style('right', '0');
+            this.controlsContainer.style('width', '250px');
+            this.controlsContainer.style('height', '100%');
+            this.controlsContainer.style('background-color', 'rgba(35, 35, 40, 0.9)');
+            this.controlsContainer.style('padding', '10px');
+            this.controlsContainer.style('border-left', '1px solid rgba(60,60,70,0.8)');
+            this.controlsContainer.style('box-shadow', '-2px 0 10px rgba(0,0,0,0.2)');
             this.controlsContainer.style('overflow-y', 'auto');
             this.controlsContainer.style('z-index', '1000');
             this.controlsContainer.style('display', 'flex');
             this.controlsContainer.style('flex-direction', 'column');
+            this.controlsContainer.style('color', '#e0e0e0');
             document.body.appendChild(this.controlsContainer.elt);
+            
+            // Adiciona título
+            const title = createDiv('Controles do Simulador');
+            title.parent(this.controlsContainer);
+            title.style('font-size', '16px');
+            title.style('font-weight', 'bold');
+            title.style('margin-bottom', '15px');
+            title.style('text-align', 'center');
+            title.style('padding-bottom', '5px');
+            title.style('border-bottom', '1px solid rgba(100,100,120,0.5)');
         }
 
         // Inicializa os controles dos predadores
@@ -376,6 +396,46 @@ class Simulation {
     }
 
     /**
+     * Atualiza o grid espacial com todas as entidades
+     */
+    updateSpatialGrid() {
+        this.spatialGrid.clear();
+        
+        // Adiciona todas as bactérias ao grid
+        for (let bacteria of this.bacteria) {
+            this.spatialGrid.insert(bacteria);
+        }
+        
+        // Adiciona todos os predadores ao grid
+        for (let predator of this.predators) {
+            this.spatialGrid.insert(predator);
+        }
+        
+        // Adiciona toda a comida ao grid
+        for (let food of this.food) {
+            this.spatialGrid.insert(food);
+        }
+        
+        // Adiciona todos os obstáculos ao grid
+        for (let obstacle of this.obstacles) {
+            this.spatialGrid.insert(obstacle);
+        }
+    }
+    
+    /**
+     * Atualiza ciclo dia/noite
+     */
+    updateDayNightCycle() {
+        if (!this.dayNightEnabled) return;
+        
+        this.currentTime = (this.currentTime + 1) % this.dayLength;
+        if (this.currentTime === 0) {
+            this.dayTime = !this.dayTime;
+            console.log(`Agora é ${this.dayTime ? 'dia' : 'noite'}`);
+        }
+    }
+
+    /**
      * Atualiza a simulação
      */
     update() {
@@ -384,9 +444,15 @@ class Simulation {
         // Atualiza controles e obtém o estado atual
         this.updateFromControls();
         const state = this.controls.getState();
+        
+        // Atualiza ciclo dia/noite
+        this.updateDayNightCycle();
 
         // Calcula o número de atualizações baseado na velocidade
         const updates = Math.ceil(this.speed); // Número de atualizações por frame
+
+        // Atualiza o grid espacial com entidades
+        this.updateSpatialGrid();
 
         // Executa as atualizações
         for (let u = 0; u < updates; u++) {
@@ -399,15 +465,34 @@ class Simulation {
                 bacteria.starvationTime = Math.max((state.feedingInterval || 30) * 60, 1800);
                 bacteria.maxEnergy = Math.max(state.initialEnergy || 150, 100);
                 
-                // Atualiza bactéria com delta time ajustado pela velocidade
+                // Busca entidades próximas usando o grid espacial
+                const perceptionRadius = bacteria.perceptionRadius || 150;
+                const nearbyEntities = this.spatialGrid.queryRadius(bacteria.pos, perceptionRadius);
+                
+                // Separa entidades por tipo
+                const nearbyFood = nearbyEntities.filter(e => e instanceof Food);
+                const nearbyPredators = nearbyEntities.filter(e => e instanceof Predator);
+                const nearbyBacteria = nearbyEntities.filter(e => e instanceof Bacteria && e !== bacteria);
+                
+                // Atualiza bactéria com as entidades próximas ao invés de todas as entidades
                 const deltaTime = 1 / (60 * updates);
                 const child = bacteria.update(
-                    this.food, 
-                    this.predators,
+                    nearbyFood, 
+                    nearbyPredators,
                     this.obstacles,
-                    [...this.bacteria, ...this.predators],
+                    nearbyBacteria,
                     deltaTime
                 );
+                
+                // Adiciona efeito do ciclo dia/noite ao comportamento
+                if (this.dayNightEnabled) {
+                    bacteria.isDaytime = this.dayTime;
+                    // Durante a noite, movimento mais lento e menos energia gasta
+                    if (!this.dayTime) {
+                        bacteria.movement.speed *= 0.7;
+                        bacteria.healthLossRate *= 0.8;
+                    }
+                }
                 
                 // Adiciona filho se houver e respeita o limite de população
                 if (child && this.bacteria.length < this.populationLimit) {
@@ -424,11 +509,18 @@ class Simulation {
                 }
             }
 
-            // Atualiza predadores com delta time ajustado
+            // Atualiza predadores com otimização similar
             for (let i = this.predators.length - 1; i >= 0; i--) {
                 const predator = this.predators[i];
+                const perceptionRadius = predator.perceptionRadius || 200;
+                const nearbyEntities = this.spatialGrid.queryRadius(predator.pos, perceptionRadius);
+                
+                const nearbyBacteria = nearbyEntities.filter(e => e instanceof Bacteria);
+                const nearbyObstacles = this.obstacles; // Obstáculos são poucos, manter todos
+                const nearbyPredators = nearbyEntities.filter(e => e instanceof Predator && e !== predator);
+                
                 const deltaTime = 1 / (60 * updates);
-                const child = predator.update(this.bacteria, this.obstacles, this.predators, deltaTime);
+                const child = predator.update(nearbyBacteria, nearbyObstacles, nearbyPredators, deltaTime);
                 
                 // Adiciona novo predador se houver reprodução
                 if (child) {
@@ -441,8 +533,8 @@ class Simulation {
                 }
             }
 
-            // Verifica interações
-            this.checkInteractions();
+            // Verifica interações com otimização de colisão
+            this.checkInteractionsOptimized();
 
             // Gera nova comida com mais frequência
             if (frameCount % Math.max(1, Math.round(state.foodSpawnInterval * 30 / this.speed)) === 0) {
@@ -450,22 +542,93 @@ class Simulation {
                     this.generateFood(this.foodSpawnAmount);
                 }
             }
-
-            // Gera novo predador ocasionalmente (ajustado pela velocidade)
-            if (this.predators.length < 2 && frameCount % Math.max(1, Math.round(1800 / this.speed)) === 0) {
-                this.predators.push(new Predator(random(width), random(height)));
+            
+            // Implementa recursos limitados - comida tem tempo de vida e regeneração
+            if (this.food.length > 0) {
+                let maxFood = state.foodLimit || 200;
+                
+                // Remove comida excedente (começa pelas mais antigas)
+                if (this.food.length > maxFood) {
+                    this.food.splice(0, this.food.length - maxFood);
+                }
+                
+                // Comida se regenera lentamente
+                for (let food of this.food) {
+                    if (food.nutrition < 50) {
+                        food.nutrition += 0.01;
+                        food.size = map(food.nutrition, 10, 50, 5, 15);
+                    }
+                }
             }
         }
-
-        // Atualiza efeitos (apenas uma vez por frame)
-        for (let i = this.effects.length - 1; i >= 0; i--) {
-            if (!this.effects[i].update()) {
-                this.effects.splice(i, 1);
-            }
-        }
-
-        // Atualiza estatísticas (apenas uma vez por frame)
+        
+        // Atualiza estatísticas
         this.updateStats();
+    }
+    
+    /**
+     * Versão otimizada da verificação de interações
+     */
+    checkInteractionsOptimized() {
+        // Verifica interações bactéria-comida
+        for (let i = this.bacteria.length - 1; i >= 0; i--) {
+            const bacteria = this.bacteria[i];
+            
+            // Usa o grid para verificar apenas comida próxima
+            const nearbyFood = this.spatialGrid.queryRadius(bacteria.pos, bacteria.size + 10);
+            const food = nearbyFood.filter(e => e instanceof Food);
+            
+            for (let j = food.length - 1; j >= 0; j--) {
+                const f = food[j];
+                const d = dist(bacteria.pos.x, bacteria.pos.y, f.position.x, f.position.y);
+                
+                if (d < bacteria.size / 2 + f.size / 2) {
+                    // Bactéria come a comida
+                    bacteria.eat(f);
+                    this.stats.foodConsumed++;
+                    
+                    // Comida é consumida parcialmente ou totalmente
+                    f.nutrition -= 10;
+                    if (f.nutrition <= 0) {
+                        const index = this.food.indexOf(f);
+                        if (index > -1) {
+                            this.food.splice(index, 1);
+                        }
+                    } else {
+                        // Atualiza tamanho baseado na nutrição restante
+                        f.size = map(f.nutrition, 10, 50, 5, 15);
+                    }
+                }
+            }
+        }
+        
+        // Interações bactéria-bactéria (reprodução)
+        for (let i = 0; i < this.bacteria.length; i++) {
+            const bacteria = this.bacteria[i];
+            if (!bacteria.reproduction || !bacteria.reproduction.canMateNow()) continue;
+            
+            // Usa o grid para verificar apenas bactérias próximas
+            const nearbyEntities = this.spatialGrid.queryRadius(bacteria.pos, 50);
+            const nearbyBacteria = nearbyEntities.filter(e => 
+                e instanceof Bacteria && e !== bacteria
+            );
+            
+            for (let otherBacteria of nearbyBacteria) {
+                if (!otherBacteria.reproduction) continue;
+                
+                const d = dist(bacteria.pos.x, bacteria.pos.y, otherBacteria.pos.x, otherBacteria.pos.y);
+                if (d < bacteria.size + otherBacteria.size) {
+                    this.stats.matingAttempts++;
+                    
+                    // Tenta acasalar
+                    const success = bacteria.reproduction.mate(otherBacteria.reproduction);
+                    if (success) {
+                        this.stats.successfulMatings++;
+                        break; // Apenas um acasalamento por frame
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -792,52 +955,6 @@ class Simulation {
                 random(20, 100),
                 random(20, 100)
             ));
-        }
-    }
-
-    /**
-     * Verifica interações entre elementos da simulação
-     */
-    checkInteractions() {
-        // Verifica colisões com comida
-        for (let i = this.food.length - 1; i >= 0; i--) {
-            const food = this.food[i];
-            
-            for (let bacteria of this.bacteria) {
-                if (dist(bacteria.pos.x, bacteria.pos.y, food.position.x, food.position.y) < bacteria.size / 2 + food.size / 2) {
-                    if (bacteria.eat(food)) {
-                        this.stats.foodEaten++;
-                        this.food.splice(i, 1);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Verifica reprodução
-        for (let i = 0; i < this.bacteria.length; i++) {
-            const b1 = this.bacteria[i];
-            
-            for (let j = i + 1; j < this.bacteria.length; j++) {
-                const b2 = this.bacteria[j];
-                
-                if (dist(b1.pos.x, b1.pos.y, b2.pos.x, b2.pos.y) < b1.size) {
-                    if (b1.mate(b2)) {
-                        this.stats.successfulMates++;
-                    }
-                }
-            }
-        }
-
-        // Verifica fugas bem-sucedidas
-        for (let bacteria of this.bacteria) {
-            const predator = bacteria.findClosestPredator([...this.predators]);
-            if (predator) {
-                const d = dist(bacteria.pos.x, bacteria.pos.y, predator.pos.x, predator.pos.y);
-                if (d < bacteria.perceptionRadius && d > predator.size * 2) {
-                    this.stats.escapes++;
-                }
-            }
         }
     }
 

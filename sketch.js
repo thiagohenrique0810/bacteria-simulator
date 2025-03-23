@@ -6,18 +6,28 @@
 let simulation;
 let visualization;
 let setupComplete = false;
+let controlsWidth = 250; // Largura do painel de controles
 
 /**
  * Configuração inicial
  */
 function setup() {
-    // Cria o canvas primeiro
-    createCanvas(1000, 600);
+    // Calcula o tamanho adequado para o canvas considerando o painel de controles
+    const totalWidth = windowWidth;
+    const simulationWidth = totalWidth - controlsWidth;
+    const simulationHeight = windowHeight;
+    
+    // Cria o canvas com o tamanho ajustado
+    createCanvas(simulationWidth, simulationHeight);
     
     // Aguarda um momento para garantir que o p5.js está pronto
     window.setTimeout(() => {
         // Inicializa a simulação
         simulation = new Simulation();
+        
+        // Ajusta as dimensões da simulação para o canvas
+        simulation.width = simulationWidth;
+        simulation.height = simulationHeight;
         
         // Inicializa o sistema de visualização
         visualization = new SimulationVisualization(simulation);
@@ -38,7 +48,7 @@ function setup() {
 function draw() {
     if (!setupComplete) {
         // Mostra mensagem de carregamento
-        background(51);
+        background(30);
         fill(255);
         noStroke();
         textSize(20);
@@ -48,7 +58,7 @@ function draw() {
     }
 
     // Limpa a tela
-    background(51);
+    background(30);
 
     // Atualiza a simulação
     simulation.update();
@@ -67,13 +77,11 @@ function mousePressed() {
     if (!setupComplete) return;
 
     // Verifica se o clique foi na área de controles
-    const controlsContainer = document.getElementById('controls-container');
-    if (controlsContainer && controlsContainer.contains(event.target)) {
+    if (mouseX >= width - controlsWidth) {
         return false; // Permite que o evento seja processado pelos controles
     }
 
-    if (mouseX >= 800) return false; // Ignora cliques na área de informações
-    if (mouseY >= height) return false;
+    if (mouseX >= width || mouseY >= height) return false;
 
     if (simulation.isPlacingObstacle) {
         simulation.obstacleStart = createVector(mouseX, mouseY);
@@ -107,9 +115,28 @@ function mousePressed() {
     }
 }
 
+/**
+ * Ajusta o tamanho do canvas quando a janela é redimensionada
+ */
+function windowResized() {
+    // Recalcula o tamanho do canvas
+    const totalWidth = windowWidth;
+    const simulationWidth = totalWidth - controlsWidth;
+    const simulationHeight = windowHeight;
+    
+    // Redimensiona o canvas
+    resizeCanvas(simulationWidth, simulationHeight);
+    
+    // Atualiza as dimensões da simulação
+    if (simulation) {
+        simulation.width = simulationWidth;
+        simulation.height = simulationHeight;
+    }
+}
+
 function mouseDragged() {
     if (simulation.isDragging && simulation.selectedBacteria) {
-        simulation.selectedBacteria.pos.x = constrain(mouseX, 10, 780);
+        simulation.selectedBacteria.pos.x = constrain(mouseX, 10, width - 10);
         simulation.selectedBacteria.pos.y = constrain(mouseY, 10, height - 10);
         simulation.selectedBacteria.movement.velocity.set(0, 0);
         

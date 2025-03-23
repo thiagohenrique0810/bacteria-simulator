@@ -137,7 +137,10 @@ class CommunicationSystem {
     }
 }
 
-// Exporta a classe
+// Exportar para o escopo global
+window.CommunicationSystem = CommunicationSystem;
+
+// Exportar para sistemas modulares, se necessário
 if (typeof module !== 'undefined') {
     module.exports = CommunicationSystem;
 } 

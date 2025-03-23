@@ -174,7 +174,10 @@ class CommunicationInterface {
     }
 }
 
-// Exporta a classe
+// Exportar para o escopo global
+window.CommunicationInterface = CommunicationInterface;
+
+// Exportar para sistemas modulares, se necessário
 if (typeof module !== 'undefined') {
     module.exports = CommunicationInterface;
 } 

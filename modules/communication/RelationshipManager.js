@@ -179,7 +179,10 @@ class RelationshipManager {
     }
 }
 
-// Exporta a classe
+// Exportar para o escopo global
+window.RelationshipManager = RelationshipManager;
+
+// Exportar para sistemas modulares, se necessário
 if (typeof module !== 'undefined') {
     module.exports = RelationshipManager;
 } 

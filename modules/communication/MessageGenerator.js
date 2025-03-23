@@ -220,7 +220,10 @@ class MessageGenerator {
     }
 }
 
-// Exporta a classe
+// Exportar para o escopo global
+window.MessageGenerator = MessageGenerator;
+
+// Exportar para sistemas modulares, se necessário
 if (typeof module !== 'undefined') {
     module.exports = MessageGenerator;
 } 

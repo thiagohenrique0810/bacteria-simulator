@@ -181,7 +181,10 @@ class MessageManager {
     }
 }
 
-// Exporta a classe
+// Exportar para o escopo global
+window.MessageManager = MessageManager;
+
+// Exportar para sistemas modulares, se necessário
 if (typeof module !== 'undefined') {
     module.exports = MessageManager;
 } 
